@@ -1,0 +1,63 @@
+# LLM-Shell: Language Model Enhanced Command Line Interface
+
+## Overview
+LLM-Shell is a command-line interface (CLI) tool that enhances your shell experience with the power of large language models (LLMs) such as GPT-4 and GPT-3.5 Turbo. It acts as a wrapper around your standard shell, allowing you to execute regular shell commands while also providing the capability to consult an LLM for programming assistance, code examples, and executing commands with natural language understanding.
+
+## Features
+- Execute standard shell commands with real-time output.
+- Use language models to process commands described in natural language.
+- Syntax highlighting for code blocks returned by the language model.
+- Set a context file to provide additional information to the LLM.
+- Change the underlying LLM backend (e.g., GPT-4 Turbo, GPT-4, GPT-3.5 Turbo).
+- Autocompletion for custom commands and file paths.
+- History tracking of commands and LLM responses.
+
+## Prerequisites
+- Python 3
+- `requests` library for making HTTP requests to the LLM API.
+- `pygments` library for syntax highlighting.
+- An API key from OpenAI for accessing their language models.
+
+## Installation
+1. Ensure you have Python 3 installed on your system.
+2. Install the required Python packages:
+   ```
+pip install requests pygments
+   ```
+3. Clone the repository or download the `llm-shell.py` script to your local machine.
+4. Make sure the script is executable:
+   ```sh
+   chmod +x llm-shell.py
+   ```
+5. Set your OpenAI API key as an environment variable `CHATGPT_API_KEY` or within a `.env` file that the script can read.
+
+## Usage
+To start the LLM-Shell, simply run the `llm-shell.py` script:
+
+```sh
+./llm-shell.py
+```
+
+### Executing Commands
+- Standard shell commands are executed as normal, e.g., `ls -la`.
+- To use the LLM, prefix your command with a hash `#`, followed by the natural language instruction, e.g., `# How do I list all files in the current directory?`.
+
+### Special Commands
+- `help` - Displays a list of available custom commands within the LLM-Shell.
+- `set-llm [backend]` - Changes the LLM backend. Replace `[backend]` with one of the supported backends (currently `gpt-4-turbo`, `gpt-4`, and `gpt-3.5-turbo`).
+- `context [filename]` - Sets a context file that will be used to provide additional information to the LLM. Use `context none` to clear the context file.
+- `exit` - Exits the LLM-Shell.
+
+### Autocompletion
+- The LLM-Shell supports autocompletion for file paths and custom commands. Press `Tab` to autocomplete the current input.
+
+## Customization
+Modify the `llm-shell.py` script to add new features or change existing behavior to better suit your needs.
+
+## License
+LLM-Shell is released under the MIT License. See the LICENSE file for more information.
+
+## Disclaimer
+LLM-Shell is not an official product and is not affiliated with OpenAI.
+It's just an open-source tool developed to showcase the integration of LLMs into a command-line environment.
+Use it at your own risk.

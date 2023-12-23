@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+docker build -t "test-llm-shell" docker
+docker run -it --rm --cap-drop=ALL -v "$PWD:/app" -v "$PWD/docker:/app/docker:ro" --name running-test-llm-shell "test-llm-shell"
