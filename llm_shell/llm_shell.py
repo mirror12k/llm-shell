@@ -7,8 +7,8 @@ import readline
 import glob
 import traceback
 
-import chatgpt_support
-from util import bold_gold, bold_red_and_black_background, get_prompt, shorten_output, change_directory, apply_syntax_highlighting
+import llm_shell.chatgpt_support
+from llm_shell.util import bold_gold, bold_red_and_black_background, get_prompt, shorten_output, change_directory, apply_syntax_highlighting
 
 # Global flag to indicate if a command is currently running
 is_command_running = False

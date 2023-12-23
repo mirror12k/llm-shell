@@ -1,7 +1,7 @@
 import os
 import requests
 
-from util import bold_gold
+from llm_shell.util import bold_gold
 
 chatgpt_api_key = os.getenv('CHATGPT_API_KEY')
 
