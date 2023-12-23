@@ -14,7 +14,7 @@ from llm_shell.util import bold_gold, bold_red_and_black_background, get_prompt,
 is_command_running = False
 llm_backend = os.getenv('LLM_BACKEND', 'gpt-4-turbo')
 context_file = None
-history = []  # Initialize an empty list for context history
+history = []
 
 def execute_shell_command(cmd):
     global is_command_running
@@ -39,16 +39,15 @@ def execute_shell_command(cmd):
     except KeyboardInterrupt:
         process.kill()
         print("^C")
-        # print("\nCommand interrupted.")
     finally:
         is_command_running = False
 
     return ''.join(output)
 
 support_llm_backends = {
-    'gpt-4-turbo': chatgpt_support.send_to_gpt4turbo,
-    'gpt-4': chatgpt_support.send_to_gpt4,
-    'gpt-3.5-turbo': chatgpt_support.send_to_gpt35turbo,
+    'gpt-4-turbo': llm_shell.chatgpt_support.send_to_gpt4turbo,
+    'gpt-4': llm_shell.chatgpt_support.send_to_gpt4,
+    'gpt-3.5-turbo': llm_shell.chatgpt_support.send_to_gpt35turbo,
 }
 
 def send_to_llm(context):
@@ -82,7 +81,7 @@ def handle_command(command):
             context_file = None
         print(f"Context file set to {context_file}")
     elif command.startswith('#'):
-        command = command[1:]  # Remove the '#'
+        command = command[1:] # Remove the '#'
 
         # Prepare the context
         context = []
@@ -173,5 +172,4 @@ def run_llm_shell():
 def main():
     run_llm_shell()
 
-if __name__ == "__main__":
-    main()
+
