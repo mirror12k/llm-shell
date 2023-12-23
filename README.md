@@ -21,14 +21,14 @@ LLM-Shell is a command-line interface (CLI) tool that enhances your shell experi
 ## Installation
 1. Ensure you have Python 3 installed on your system.
 2. Install the required Python packages:
-   ```
+```
 pip install requests pygments
-   ```
+```
 3. Clone the repository or download the `llm-shell.py` script to your local machine.
 4. Make sure the script is executable:
-   ```sh
+```sh
    chmod +x llm-shell.py
-   ```
+```
 5. Set your OpenAI API key as an environment variable `CHATGPT_API_KEY` or within a `.env` file that the script can read.
 
 ## Usage
