@@ -74,23 +74,37 @@ def handle_command(command):
         llm_backend = command[len('set-llm '):].strip()
         print(f"LLM backend set to {llm_backend}")
     elif command == 'context' or command == 'context ':
-        print(f"Current context file is {context_file}")
+        print(f"Current context file(s): {context_file}")
     elif command.startswith('context '):
-        context_file = command[len('context '):].strip()
-        if context_file.lower() == 'none':
+        context_args = command[len('context '):].strip().split()
+        context_files = []
+        if len(context_args) == 1 and context_args[0].lower() == 'none':
             context_file = None
-        print(f"Context file set to {context_file}")
+        else:
+            for arg in context_args:
+                expanded_files = glob.glob(arg)
+                if expanded_files:
+                    context_files.extend(expanded_files)
+                else:
+                    print(f"Warning: No files matched pattern '{arg}'")
+            context_file = context_files if context_files else None
+        print(f"Context file(s) set to {context_file}")
+
     elif command.startswith('#'):
-        command = command[1:] # Remove the '#'
+        command = command[1:]  # Remove the '#'
 
         # Prepare the context
         context = []
 
-        # Add the contents of the context file if it's set
+        # Add the contents of the context files if they're set
         if context_file is not None:
-            with open(context_file, 'r') as file:
-                file_contents = file.read()
-                context.append({"role": "user", "content": f'cat {context_file}\n{file_contents}'})
+            for file_path in context_file:
+                try:
+                    with open(file_path, 'r') as file:
+                        file_contents = file.read()
+                        context.append({"role": "user", "content": f'cat {file_path}\n{file_contents}'})
+                except FileNotFoundError:
+                    print(f"Error: File '{file_path}' not found")
 
         # Add the last 5 entries from the history
         context.extend(history[-5:])
@@ -121,6 +135,13 @@ def complete(text, state):
     if not text:
         # If no text has been typed, show all custom commands and file completions
         completions = custom_commands + glob.glob('*')
+    elif full_input.startswith('set-llm'):
+        # Provide suggestions from the keys of support_llm_backends
+        llm_backends = list(support_llm_backends.keys())
+        if text:
+            completions = [backend for backend in llm_backends if backend.startswith(text)]
+        else:
+            completions = llm_backends
     elif full_input.startswith(('./', '/')) or (len(split_input) > 1 and not full_input.endswith(' ')):
         # Autocomplete file and directory names
         completions = glob.glob(text + '*')
