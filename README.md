@@ -7,8 +7,9 @@ LLM-Shell is a command-line interface (CLI) tool that enhances your shell experi
 - Execute standard shell commands with real-time output.
 - Use language models to process commands described in natural language.
 - Syntax highlighting for code blocks returned by the language model.
-- Set a context file to provide additional information to the LLM.
+- Set one or multiple context files to provide additional information to the LLM.
 - Change the underlying LLM backend (e.g., GPT-4 Turbo, GPT-4, GPT-3.5 Turbo).
+- Set or update the instruction for the LLM to change how it assists you.
 - Autocompletion for custom commands and file paths.
 - History tracking of commands and LLM responses.
 
@@ -68,8 +69,9 @@ To start the LLM-Shell, navigate to the `bin` directory and run the `llm_shell` 
 ### Special Commands
 
 - `help` - Displays a list of available custom commands within the LLM-Shell.
-- `set-llm [backend]` - Changes the LLM backend. Replace `[backend]` with one of the supported backends (currently `gpt-4-turbo`, `gpt-4`, and `gpt-3.5-turbo`).
-- `context [filename]` - Sets a context file that will be used to provide additional information to the LLM. Use `context none` to clear the context file.
+- `llm-backend [backend]` - Changes the LLM backend. Replace `[backend]` with one of the supported backends (e.g., `gpt-4-turbo`, `gpt-4`, `gpt-3.5-turbo`, `claude-instant-v1`, `claude-v2.1`).
+- `llm-instruction [instruction]` - Sets or updates the instruction for the LLM. Use this command to change how the LLM assists you.
+- `context [filename1] [filename2] ...` - Sets one or multiple context files that will be used to provide additional information to the LLM. Use `context none` to clear the context files.
 - `exit` - Exits the LLM-Shell.
 
 ### Autocompletion
@@ -89,4 +91,3 @@ LLM-Shell is released under the MIT License. See the LICENSE file for more infor
 LLM-Shell is not an official product and is not affiliated with OpenAI.
 It's just an open-source tool developed to showcase the integration of LLMs into a command-line environment.
 Use it at your own risk.
-
