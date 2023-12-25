@@ -36,7 +36,7 @@ def send_to_chatgpt_model(context, model):
 
     data = {
         "model": model,
-        "messages": [{ "role": "system", "content": "You are a programming assistant. Help the user build programs and resolve errors." }] + context,
+        "messages": context,
         "temperature": 0.7,
         "max_tokens": 1000
     }

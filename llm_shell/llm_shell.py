@@ -13,6 +13,7 @@ from llm_shell.util import bold_gold, bold_red_and_black_background, get_prompt,
 # Global flag to indicate if a command is currently running
 is_command_running = False
 llm_backend = os.getenv('LLM_BACKEND', 'gpt-4-turbo')
+llm_instruction = "You are a programming assistant. Help the user build programs and resolve errors."
 context_file = None
 history = []
 
@@ -52,16 +53,19 @@ support_llm_backends = {
 
 def send_to_llm(context):
     if llm_backend in support_llm_backends:
-        return support_llm_backends[llm_backend](context)
+        # Include the llm_instruction in the context
+        context_with_instruction = [{"role": "system", "content": llm_instruction}] + context
+        return support_llm_backends[llm_backend](context_with_instruction)
     else:
         raise Exception(f"LLM backend '{llm_backend}' is not supported yet.")
 
+
 def handle_command(command):
-    global history, llm_backend, context_file
+    global history, llm_backend, llm_instruction, context_file
 
     if command.lower() == 'help':
         print("Available commands:")
-        print("  set-llm [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
+        print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
         print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
         print("  # [command] - Use the hash sign to prefix any command you want the language model to process.")
         print("  exit - Exit the shell.")
@@ -70,9 +74,20 @@ def handle_command(command):
     elif command.startswith('cd '):
         path = command[3:].strip()
         os.chdir(path)
-    elif command.startswith('set-llm '):
-        llm_backend = command[len('set-llm '):].strip()
+    elif command.startswith('llm-backend '):
+        llm_backend = command[len('llm-backend '):].strip()
         print(f"LLM backend set to {llm_backend}")
+    elif command == 'llm-instruction' or command == 'llm-instruction ':
+        # Get the current LLM instruction
+        print(f"Current LLM instruction: {llm_instruction}")
+    elif command.startswith('llm-instruction '):
+        # Set the LLM instruction
+        instruction = command[len('llm-instruction '):].strip()
+        if instruction:
+            llm_instruction = instruction
+            print(f"LLM instruction set to: {llm_instruction}")
+        else:
+            print("Please provide an instruction after 'llm-instruction'.")
     elif command == 'context' or command == 'context ':
         print(f"Current context file(s): {context_file}")
     elif command.startswith('context '):
@@ -89,7 +104,6 @@ def handle_command(command):
                     print(f"Warning: No files matched pattern '{arg}'")
             context_file = context_files if context_files else None
         print(f"Context file(s) set to {context_file}")
-
     elif command.startswith('#'):
         command = command[1:]  # Remove the '#'
 
@@ -130,22 +144,27 @@ def complete(text, state):
     split_input = full_input.split()
 
     # Custom commands for autocompletion
-    custom_commands = ['set-llm ', 'context ']
+    custom_commands = ['llm-backend ', 'context ', 'llm-instruction ']
 
-    if not text:
-        # If no text has been typed, show all custom commands and file completions
-        completions = custom_commands + glob.glob('*')
-    elif full_input.startswith('set-llm'):
+    if full_input.startswith('llm-backend'):
         # Provide suggestions from the keys of support_llm_backends
         llm_backends = list(support_llm_backends.keys())
         if text:
             completions = [backend for backend in llm_backends if backend.startswith(text)]
         else:
             completions = llm_backends
+    elif not text:
+        # If no text has been typed, show all custom commands and file completions
+        completions = custom_commands + glob.glob('*')
     elif full_input.startswith(('./', '/')) or (len(split_input) > 1 and not full_input.endswith(' ')):
         # Autocomplete file and directory names
-        completions = glob.glob(text + '*')
-    elif text.startswith('se') or text.startswith('co'):
+        completions = []
+        for item in glob.glob(text + '*'):
+            if os.path.isdir(item):
+                completions.append(item + '/')
+            else:
+                completions.append(item)
+    elif text.startswith('llm') or text.startswith('co'):
         # If the current text matches the start of our custom commands, suggest them
         completions = [c for c in custom_commands if c.startswith(text)]
     else:
@@ -160,12 +179,12 @@ def complete(text, state):
 
 def run_llm_shell():
     # Set the tab completion function
+    readline.set_completer_delims(' \t\n;')
     readline.set_completer(complete)
     readline.parse_and_bind('tab: complete')
 
     while True:
         try:
-            sys.stdin.flush()
             command = input(get_prompt(llm_backend))
 
             # Add command to history if it's not a repetition of the last command
