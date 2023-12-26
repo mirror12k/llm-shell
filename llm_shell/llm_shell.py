@@ -5,13 +5,11 @@ import getpass
 import readline
 import glob
 import traceback
-import threading
-import time
 import argparse
 
 import llm_shell.chatgpt_support
 import llm_shell.bedrock_support
-from llm_shell.util import bold_gold, bold_red_and_black_background, get_prompt, shorten_output, change_directory, apply_syntax_highlighting
+from llm_shell.util import get_prompt, shorten_output, apply_syntax_highlighting, start_spinner
 
 # Global flag to indicate if a command is currently running
 is_command_running = False
@@ -56,21 +54,9 @@ support_llm_backends = {
     'claude-v2.1': llm_shell.bedrock_support.send_to_claude21,
 }
 
-def spinner():
-    spinner_chars = "|/-\\"
-    idx = 0
-    while is_command_running:  # Use the global flag to keep spinning
-        print(spinner_chars[idx % len(spinner_chars)], end='\r')
-        idx += 1
-        time.sleep(0.1)
-
 def send_to_llm(context):
-    global is_command_running
     if llm_backend in support_llm_backends:
-        # Start the spinner thread
-        is_command_running = True
-        spinner_thread = threading.Thread(target=spinner)
-        spinner_thread.start()
+        stop_spinner_callback = start_spinner()
 
         try:
             # Include the llm_instruction in the context
@@ -78,10 +64,7 @@ def send_to_llm(context):
             response = support_llm_backends[llm_backend](context_with_instruction)
             return response
         finally:
-            # Stop the spinner
-            is_command_running = False
-            spinner_thread.join()  # Wait for the spinner thread to finish
-            print(' ', end='\r')  # Clear the spinner character
+            stop_spinner_callback()
     else:
         raise Exception(f"LLM backend '{llm_backend}' is not supported yet.")
 
@@ -89,11 +72,16 @@ def handle_command(command):
     global history, llm_backend, llm_instruction, context_file
 
     if command.lower() == 'help':
-        print("Available commands:")
-        print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
-        print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
-        print("  # [command] - Use the hash sign to prefix any command you want the language model to process.")
+        print("LLM Shell Help:")
+        print("  help - Show this help message.")
         print("  exit - Exit the shell.")
+        print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
+        print("  llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).")
+        print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
+        print("  # [command] - Use the hash sign to prefix any shell command for the language model to process.")
+        print("  cd [directory] - Change the current working directory.")
+        print("  [shell command] - Execute any standard shell command.")
+        print("  Use the tab key to autocomplete commands and file names.")
     elif command.lower() == 'exit':
         sys.exit()
     elif command.startswith('cd '):
@@ -135,6 +123,9 @@ def handle_command(command):
         # Prepare the context
         context = []
 
+        # Add the last 5 entries from the history
+        context.extend(history[-5:])
+
         # Add the contents of the context files if they're set
         if context_file is not None:
             for file_path in context_file:
@@ -144,9 +135,6 @@ def handle_command(command):
                         context.append({"role": "user", "content": f'$ cat {file_path}\n{file_contents}'})
                 except FileNotFoundError:
                     print(f"Error: File '{file_path}' not found")
-
-        # Add the last 5 entries from the history
-        context.extend(history[-5:])
 
         # Append the current command
         context.append({"role": "user", "content": command})

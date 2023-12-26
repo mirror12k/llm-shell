@@ -4,12 +4,14 @@ import getpass
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name
 from pygments.formatters import TerminalFormatter
+import threading
+import time
 
 
 
 def color_text(text, color_code):
     ANSI_RESET = '\033[0m'  # Reset all attributes
-    return f"{color_code}{text}{ANSI_RESET}"
+    return f"\001{color_code}\002{text}\001{ANSI_RESET}\002"
 
 def bold_gold(text):
     ANSI_BOLD = '\033[1m'  # Bold
@@ -34,14 +36,6 @@ def shorten_output(output):
     else:
         return output
 
-def change_directory(target_dir):
-    """Change the current working directory."""
-    try:
-        os.chdir(target_dir)
-        return ""
-    except OSError as e:
-        return str(e)
-
 def apply_syntax_highlighting(response):
     # Regex to find code blocks with optional language specification
     code_block_regex = r"```(\w+)?\n(.*?)\n```"
@@ -60,3 +54,25 @@ def apply_syntax_highlighting(response):
             pass  # If language not found, leave the code block as is
 
     return highlighted_response
+
+def spinner(id, stop):
+    spinner_chars = "|/-\\"
+    idx = 0
+    while not stop():  # Use the global flag to keep spinning
+        print(spinner_chars[idx % len(spinner_chars)], end='\r')
+        idx += 1
+        time.sleep(0.1)
+
+stop_threads = False
+def start_spinner():
+    global stop_threads
+    stop_threads = False
+    spinner_thread = threading.Thread(target=spinner, args=(id, lambda: stop_threads))
+    spinner_thread.start()
+    return lambda: end_spinner(spinner_thread)  # Return the thread so it can be joined later
+
+def end_spinner(spinner_thread):
+    global stop_threads
+    stop_threads = True
+    spinner_thread.join()  # Wait for the spinner thread to finish
+    print(' ', end='\r')  # Clear the spinner character
