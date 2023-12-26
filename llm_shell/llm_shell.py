@@ -7,6 +7,7 @@ import glob
 import traceback
 import threading
 import time
+import argparse
 
 import llm_shell.chatgpt_support
 import llm_shell.bedrock_support
@@ -236,6 +237,16 @@ def run_llm_shell():
 
 
 def main():
+    # Initialize the argument parser
+    parser = argparse.ArgumentParser(description='LLM Shell - A shell interface for interacting with language models.')
+    # Add the version argument
+    parser.add_argument('-v', '--version', action='version', version='LLM Shell version 0.2.1')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Start the LLM shell
     run_llm_shell()
+
 
 
