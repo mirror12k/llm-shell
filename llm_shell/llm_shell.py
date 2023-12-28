@@ -242,7 +242,7 @@ def main():
     # Initialize the argument parser
     parser = argparse.ArgumentParser(description='LLM Shell - A shell interface for interacting with language models.')
     # Add the version argument
-    parser.add_argument('-v', '--version', action='version', version='LLM Shell version 0.2.2')
+    parser.add_argument('-v', '--version', action='version', version='LLM Shell version 0.2.3')
 
     # Parse the arguments
     args = parser.parse_args()
