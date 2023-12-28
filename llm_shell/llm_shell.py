@@ -9,7 +9,7 @@ import argparse
 
 import llm_shell.chatgpt_support
 import llm_shell.bedrock_support
-from llm_shell.util import get_prompt, shorten_output, apply_syntax_highlighting, start_spinner
+from llm_shell.util import get_prompt, shorten_output, apply_syntax_highlighting, start_spinner, slow_print
 
 # Global flag to indicate if a command is currently running
 is_command_running = False
@@ -142,7 +142,8 @@ def handle_command(command):
         # Send to LLM and process response
         response = send_to_llm(context)
         highlighted_response = apply_syntax_highlighting(response)
-        print(highlighted_response)
+        slow_print(highlighted_response)
+        # print(highlighted_response)
 
         history.append({"role": "user", "content": command})
         history.append({"role": "assistant", "content": response})

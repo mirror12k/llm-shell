@@ -76,3 +76,15 @@ def end_spinner(spinner_thread):
     stop_threads = True
     spinner_thread.join()  # Wait for the spinner thread to finish
     print(' ', end='\r')  # Clear the spinner character
+
+def slow_print(msg, over_time=2):
+    # Print the highlighted_response progressively over N seconds
+    total_time = over_time # total time to print the message
+    num_chars = len(msg)
+    delay_per_char = total_time / num_chars
+
+    for char in msg:
+        print(char, end='', flush=True)
+        time.sleep(delay_per_char)
+    print('')
+
