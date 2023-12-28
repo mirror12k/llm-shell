@@ -36,7 +36,7 @@ def shorten_output(output):
     else:
         return output
 
-def apply_syntax_highlighting(response):
+def apply_syntax_highlighting(response, reindent_with_tabs=False):
     # Regex to find code blocks with optional language specification
     code_block_regex = r"```(\w+)?\n(.*?)\n```"
     matches = re.finditer(code_block_regex, response, re.DOTALL)
@@ -45,6 +45,11 @@ def apply_syntax_highlighting(response):
     for match in matches:
         language = match.group(1) if match.group(1) else "text"
         code = match.group(2)
+        
+        # If reindent_with_tabs is True, convert four leading spaces to tabs
+        if reindent_with_tabs:
+            code = re.sub(r'(?m)^( {4})+', lambda x: '\t' * (len(x.group(0)) // 4), code)
+        
         try:
             lexer = get_lexer_by_name(language, stripall=True)
             formatter = TerminalFormatter()

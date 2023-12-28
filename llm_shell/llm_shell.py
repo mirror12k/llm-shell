@@ -15,6 +15,7 @@ from llm_shell.util import get_prompt, shorten_output, apply_syntax_highlighting
 is_command_running = False
 llm_backend = os.getenv('LLM_BACKEND', 'gpt-4-turbo')
 llm_instruction = "You are a programming assistant. Help the user build programs and resolve errors."
+llm_reindent_with_tabs = True
 context_file = None
 history = []
 
@@ -69,7 +70,7 @@ def send_to_llm(context):
         raise Exception(f"LLM backend '{llm_backend}' is not supported yet.")
 
 def handle_command(command):
-    global history, llm_backend, llm_instruction, context_file
+    global history, llm_backend, llm_instruction, llm_reindent_with_tabs, context_file
 
     if command.lower() == 'help':
         print("LLM Shell Help:")
@@ -77,6 +78,7 @@ def handle_command(command):
         print("  exit - Exit the shell.")
         print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
         print("  llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).")
+        print("  llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode.")
         print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
         print("  # [command] - Use the hash sign to prefix any shell command for the language model to process.")
         print("  cd [directory] - Change the current working directory.")
@@ -101,6 +103,17 @@ def handle_command(command):
             print(f"LLM instruction set to: {llm_instruction}")
         else:
             print("Please provide an instruction after 'llm-instruction'.")
+    elif command == 'llm-reindent-with-tabs' or command == 'llm-reindent-with-tabs ':
+        # Get the current LLM instruction
+        print(f"Current llm_reindent_with_tabs: {llm_reindent_with_tabs}")
+    elif command.startswith('llm-reindent-with-tabs '):
+        # Set the LLM instruction
+        instruction = command[len('llm-reindent-with-tabs '):].strip().lower()
+        if instruction:
+            llm_reindent_with_tabs = instruction == 'true'
+            print(f"llm_reindent_with_tabs set to: {llm_reindent_with_tabs}")
+        else:
+            print("Please provide an instruction after 'llm-reindent-with-tabs'.")
     elif command == 'context' or command == 'context ':
         print(f"Current context file(s): {context_file}")
     elif command.startswith('context '):
@@ -141,7 +154,7 @@ def handle_command(command):
 
         # Send to LLM and process response
         response = send_to_llm(context)
-        highlighted_response = apply_syntax_highlighting(response)
+        highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_reindent_with_tabs)
         slow_print(highlighted_response)
         # print(highlighted_response)
 
@@ -160,7 +173,7 @@ def complete(text, state):
     split_input = full_input.split()
 
     # Custom commands for autocompletion
-    custom_commands = ['llm-backend ', 'context ', 'llm-instruction ']
+    custom_commands = ['llm-backend ', 'context ', 'llm-instruction ', 'llm-reindent-with-tabs ']
 
     if full_input.startswith('llm-backend'):
         # Provide suggestions from the keys of support_llm_backends
