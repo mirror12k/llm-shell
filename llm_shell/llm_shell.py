@@ -1,160 +1,124 @@
 import sys
 import os
 import subprocess
-import getpass
 import readline
 import glob
 import traceback
 import argparse
+from functools import partial
 
-import llm_shell.chatgpt_support
-import llm_shell.bedrock_support
-from llm_shell.util import get_prompt, shorten_output, summarize_file, apply_syntax_highlighting, start_spinner, slow_print
+import llm_shell.chatgpt_support as chatgpt_support
+import llm_shell.bedrock_support as bedrock_support
+from llm_shell.util import get_prompt, shorten_output, summarize_file, \
+    apply_syntax_highlighting, start_spinner, slow_print
 
-# Global flag to indicate if a command is currently running
-is_command_running = False
-llm_backend = os.getenv('LLM_BACKEND', 'gpt-4-turbo')
-llm_instruction = "You are a programming assistant. Help the user build programs and resolve errors."
-llm_reindent_with_tabs = True
-context_file = None
-summary_file = None
-history = []
 version = '0.2.5'
+is_command_running = False
+history = []
+llm_config = {
+    'llm_backend': os.getenv('LLM_BACKEND', 'gpt-4-turbo'),
+    'llm_instruction': "You are a programming assistant. Help the user build programs and resolve errors.",
+    'llm_reindent_with_tabs': True,
+    'context_file': [],
+    'summary_file': [],
+}
+
+support_llm_backends = {
+    'gpt-4-turbo': chatgpt_support.send_to_gpt4turbo,
+    'gpt-4': chatgpt_support.send_to_gpt4,
+    'gpt-3.5-turbo': chatgpt_support.send_to_gpt35turbo,
+    'claude-instant-v1': bedrock_support.send_to_claude_instant1,
+    'claude-v2.1': bedrock_support.send_to_claude21,
+    'hello-world': lambda msg: [ print('llm context:', msg), 'hello world!' ][1],
+}
 
 def execute_shell_command(cmd):
     global is_command_running
     is_command_running = True
     output = []
-
+    env = os.environ.copy()
+    process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True, env=env)
     try:
-        env = os.environ.copy()
-        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
-
-        # Read output line by line
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
+        for line in iter(process.stdout.readline, ''):
             if line:
-                print(line, end='')  # Print output in real-time
+                print(line, end='')
                 output.append(line)
-        
-        # Wait for the command to complete
         process.wait()
     except KeyboardInterrupt:
         process.kill()
         print("^C")
     finally:
         is_command_running = False
-
     return ''.join(output)
 
-support_llm_backends = {
-    'gpt-4-turbo': llm_shell.chatgpt_support.send_to_gpt4turbo,
-    'gpt-4': llm_shell.chatgpt_support.send_to_gpt4,
-    'gpt-3.5-turbo': llm_shell.chatgpt_support.send_to_gpt35turbo,
-    'claude-instant-v1': llm_shell.bedrock_support.send_to_claude_instant1,
-    'claude-v2.1': llm_shell.bedrock_support.send_to_claude21,
-}
-
 def send_to_llm(context):
-    if llm_backend in support_llm_backends:
-        stop_spinner_callback = start_spinner()
-
-        try:
-            return support_llm_backends[llm_backend](context)
-        finally:
-            stop_spinner_callback()
-    else:
-        raise Exception(f"LLM backend '{llm_backend}' is not supported yet.")
+    if llm_config['llm_backend'] not in support_llm_backends:
+        raise Exception(f"LLM backend '{llm_config['llm_backend']}' is not supported yet.")
+    with start_spinner():
+        return support_llm_backends[llm_config['llm_backend']](context)
 
 def handle_command(command):
-    global history, llm_backend, llm_instruction, llm_reindent_with_tabs, context_file, summary_file
+    global history
 
-    if command.lower() == 'help':
-        print("LLM Shell v"+version+":")
-        print("  help - Show this help message.")
-        print("  exit - Exit the shell.")
-        print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
-        print("  llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).")
-        print("  llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').")
-        print("  llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.")
-        print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
-        print("  summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).")
-        print("  # [command] - Use the hash sign to prefix any shell command for the language model to process.")
-        print("  cd [directory] - Change the current working directory.")
-        print("  [shell command] - Execute any standard shell command.")
-        print("  Use the tab key to autocomplete commands and file names.")
-    elif command.lower() == 'exit':
-        sys.exit()
-    elif command.startswith('cd '):
-        path = command[3:].strip()
-        os.chdir(path)
-    elif command.startswith('llm-backend '):
-        llm_backend = command[len('llm-backend '):].strip()
-        print(f"LLM backend set to {llm_backend}")
-    elif command == 'llm-instruction' or command == 'llm-instruction ':
-        # Get the current LLM instruction
-        print(f"Current LLM instruction: {llm_instruction}")
-    elif command.startswith('llm-instruction '):
-        # Set the LLM instruction
-        instruction = command[len('llm-instruction '):].strip()
-        if instruction:
-            llm_instruction = instruction
-            print(f"LLM instruction set to: {llm_instruction}")
+    def set_file_arg(file_var, *args):
+        if len(args) == 0:
+            print(f"{file_var} file(s) currently: {llm_config[file_var]}")
         else:
-            print("Please provide an instruction after 'llm-instruction'.")
-    elif command == 'llm-reindent-with-tabs' or command == 'llm-reindent-with-tabs ':
-        # Get the current LLM instruction
-        print(f"Current llm_reindent_with_tabs: {llm_reindent_with_tabs}")
-    elif command.startswith('llm-reindent-with-tabs '):
-        # Set the LLM instruction
-        instruction = command[len('llm-reindent-with-tabs '):].strip().lower()
-        if instruction:
-            llm_reindent_with_tabs = instruction == 'true'
-            print(f"llm_reindent_with_tabs set to: {llm_reindent_with_tabs}")
-        else:
-            print("Please provide an instruction after 'llm-reindent-with-tabs'.")
-    elif command == 'context' or command == 'context ':
-        print(f"Current context file(s): {context_file}")
-    elif command.startswith('context '):
-        context_args = command[len('context '):].strip().split()
-        context_files = []
-        if len(context_args) == 1 and context_args[0].lower() == 'none':
-            context_file = None
-        else:
-            for arg in context_args:
-                expanded_files = glob.glob(arg)
-                if expanded_files:
-                    context_files.extend(expanded_files)
-                else:
-                    print(f"Warning: No files matched pattern '{arg}'")
-            context_file = context_files if context_files else None
-        print(f"Context file(s) set to {context_file}")
-    elif command.startswith('summary '):
-        summary_args = command[len('summary '):].strip().split()
-        summary_files = []
-        if len(summary_args) == 1 and summary_args[0].lower() == 'none':
-            summary_file = None
-        else:
-            for arg in summary_args:
-                expanded_files = glob.glob(arg)
-                if expanded_files:
-                    summary_files.extend(expanded_files)
-                else:
-                    print(f"Warning: No files matched pattern '{arg}'")
-            summary_file = summary_files if summary_files else None
-        print(f"Summary file(s) set to {summary_file}")
-    elif command.startswith('llm-chatgpt-apikey '):
-        api_key = command[len('llm-chatgpt-apikey '):].strip()
-        if api_key:
-            llm_shell.chatgpt_support.chatgpt_api_key = api_key
-            print("CHATGPT_API_KEY set successfully.")
-        else:
-            print("Please provide an API key after 'llm-chatgpt-apikey'.")
+            files = [] if args == ['none'] else [file for arg in args for file in glob.glob(arg) if file]
+            llm_config[file_var] = files
+            print(f"{file_var} file(s) set to {files}")
 
+    def set_config_arg(module, option, *value, is_boolean=False, censor_value=False):
+        if type(module) is dict:
+            if len(value) > 0:
+                module[option] = ' '.join(value).strip() if not is_boolean else ' '.join(value).strip().lower() == 'true'
+                print('set ' + option + ' to', module[option] if not censor_value else '[...]')
+            else:
+                print(option + ':', module[option] if not censor_value else '[...]')
+        else:
+            if len(value) > 0:
+                setattr(module, option, ' '.join(value).strip() if not is_boolean else ' '.join(value).strip().lower() == 'true')
+                print('set ' + option + ' to', getattr(module, option) if not censor_value else '[...]')
+            else:
+                print(option + ':', getattr(module, option) if not censor_value else '[...]')
+
+    commands = {
+        'help': lambda: print("LLM Shell v"+version+""":
+    help - Show this help message.
+    exit - Exit the shell.
+    llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).
+    llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).
+    llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').
+    llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.
+    context [filename] - Set a file to use as context for the language model (use 'none' to clear).
+    summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).
+    # [command] - Use the hash sign to prefix any shell command for the language model to process.
+    cd [directory] - Change the current working directory.
+    [shell command] - Execute any standard shell command.
+    Use the tab key to autocomplete commands and file names."""),
+        'exit': sys.exit,
+        'cd': lambda path: os.chdir(path.strip()),
+        'llm-backend': partial(set_config_arg, llm_config, 'llm_backend'),
+        'llm-instruction': partial(set_config_arg, llm_config, 'llm_instruction'),
+        'llm-reindent-with-tabs': partial(set_config_arg, llm_config, 'llm_reindent_with_tabs', is_boolean=True),
+        'llm-chatgpt-apikey': partial(set_config_arg, chatgpt_support, 'chatgpt_api_key', censor_value=True),
+        'context': partial(set_file_arg, 'context_file'),
+        'summary': partial(set_file_arg, 'summary_file'),
+    }
+
+    def process_standard_command():
+        output = execute_shell_command(command)
+        shortened_output = shorten_output(output)
+        history.append({"role": "user", "content": f'$ {command}\n{shortened_output}'})
+
+    cmd_key, *args = command.split(maxsplit=1)
+    cmd_key = cmd_key.lower()
+    if cmd_key in commands:
+        arguments = args[0].split() if args else []
+        commands[cmd_key](*arguments)
     elif command.startswith('#'):
-        command = command[1:]  # Remove the '#'
+        command = command[1:] # Remove the '#'
 
         # Prepare the context
         context = []
@@ -163,46 +127,40 @@ def handle_command(command):
         context.extend(history[-5:])
 
         # Add the contents of the summary files if they're set
-        if summary_file is not None:
-            for file_path in summary_file:
-                try:
-                    with open(file_path, 'r') as file:
-                        file_contents = file.read()
-                        # Process lines to remove those starting with whitespace
-                        file_contents = summarize_file(file_contents)
-                        context.append({"role": "user", "content": f'$ cat {file_path} | summarize\n{file_contents}'})
-                except FileNotFoundError:
-                    print(f"Error: File '{file_path}' not found")
+        for file_path in llm_config['summary_file']:
+            try:
+                with open(file_path, 'r') as file:
+                    file_contents = file.read()
+                    # Process lines to remove those starting with whitespace
+                    file_contents = summarize_file(file_contents)
+                    context.append({"role": "user", "content": f'$ cat {file_path} | summarize\n{file_contents}'})
+            except FileNotFoundError:
+                print(f"Error: File '{file_path}' not found")
 
 
         # Add the contents of the context files if they're set
-        if context_file is not None:
-            for file_path in context_file:
-                try:
-                    with open(file_path, 'r') as file:
-                        file_contents = file.read()
-                        context.append({"role": "user", "content": f'$ cat {file_path}\n{file_contents}'})
-                except FileNotFoundError:
-                    print(f"Error: File '{file_path}' not found")
+        for file_path in llm_config['context_file']:
+            try:
+                with open(file_path, 'r') as file:
+                    file_contents = file.read()
+                    context.append({"role": "user", "content": f'$ cat {file_path}\n{file_contents}'})
+            except FileNotFoundError:
+                print(f"Error: File '{file_path}' not found")
 
-        context.append({"role": "system", "content": llm_instruction})
+        context.append({"role": "system", "content": llm_config['llm_instruction']})
         # Append the current command
         context.append({"role": "user", "content": command})
 
         # Send to LLM and process response
         response = send_to_llm(context)
-        highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_reindent_with_tabs)
+        highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
         slow_print(highlighted_response)
         # print(highlighted_response)
 
         history.append({"role": "user", "content": command})
         history.append({"role": "assistant", "content": response})
     else:
-        output = execute_shell_command(command)
-        shortened_output = shorten_output(output)  # Implement this function as needed
-        history.append({"role": "user", "content": f'$ {command}\n{shortened_output}'})
-
-    # Keep only the last 5 entries in the history
+        process_standard_command()
     history = history[-5:]
 
 def autocomplete_string(text, state):
@@ -251,17 +209,11 @@ def run_llm_shell():
 
     while True:
         try:
-            command = input(get_prompt(llm_backend))
-
-            # Add command to history if it's not a repetition of the last command
-            if command.strip() != '':
-                history_length = readline.get_current_history_length()
-                last_command = readline.get_history_item(history_length) if history_length > 0 else ''
-
-                if command != last_command:
+            command = input(get_prompt(llm_config['llm_backend']))
+            if command:
+                if readline.get_current_history_length() == 0 or command != readline.get_history_item(readline.get_current_history_length()):
                     readline.add_history(command)
-
-            handle_command(command)
+                handle_command(command)
 
         except EOFError:
             print()  # Print newline

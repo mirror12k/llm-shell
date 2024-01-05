@@ -70,26 +70,39 @@ def spinner(id, stop):
         print(spinner_chars[idx % len(spinner_chars)], end='\r')
         idx += 1
         time.sleep(0.1)
+    print(' ', end='\r')
 
-stop_threads = False
+class BarSpinner:
+    def __enter__(self):
+        self.stop_threads = False
+        self.spinner_thread = threading.Thread(target=spinner, args=(id, lambda: self.stop_threads))
+        self.spinner_thread.start()
+        # return lambda: end_spinner(spinner_thread) 
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.stop_threads = True
+        self.spinner_thread.join()  # Wait for the spinner thread to finish
+
+# stop_threads = False
 def start_spinner():
-    global stop_threads
-    stop_threads = False
-    spinner_thread = threading.Thread(target=spinner, args=(id, lambda: stop_threads))
-    spinner_thread.start()
-    return lambda: end_spinner(spinner_thread)  # Return the thread so it can be joined later
+    return BarSpinner()
+#     global stop_threads
+#     stop_threads = False
+#     spinner_thread = threading.Thread(target=spinner, args=(id, lambda: stop_threads))
+#     spinner_thread.start()
+#     return lambda: end_spinner(spinner_thread)  # Return the thread so it can be joined later
 
-def end_spinner(spinner_thread):
-    global stop_threads
-    stop_threads = True
-    spinner_thread.join()  # Wait for the spinner thread to finish
-    print(' ', end='\r')  # Clear the spinner character
+# def end_spinner(spinner_thread):
+#     global stop_threads
+#     stop_threads = True
+#     spinner_thread.join()  # Wait for the spinner thread to finish
+#     print(' ', end='\r')  # Clear the spinner character
 
 def slow_print(msg, over_time=2):
     # Print the highlighted_response progressively over N seconds
     total_time = over_time # total time to print the message
     num_chars = len(msg)
-    delay_per_char = total_time / num_chars
+    delay_per_char = min(total_time / num_chars, 0.01)
 
     for char in msg:
         print(char, end='', flush=True)

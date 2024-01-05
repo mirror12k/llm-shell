@@ -38,7 +38,7 @@ def send_to_chatgpt_model(context, model):
         "model": model,
         "messages": context,
         "temperature": 0.7,
-        "max_tokens": 1000
+        "max_tokens": 4096
     }
 
     response = requests.post("https://api.openai.com/v1/chat/completions", json=data, headers=headers)
