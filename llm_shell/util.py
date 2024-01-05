@@ -36,6 +36,9 @@ def shorten_output(output):
     else:
         return output
 
+def summarize_file(text):
+    return re.sub(r'(\t# \.\.\.\n?)+', '\t# ...\n', '\n'.join(line if not re.match(r'^\s+', line) else '\t# ...' for line in text.split('\n') if not re.match(r'^(\s*$|\s*#.*|\s*//.*)', line)))
+
 def apply_syntax_highlighting(response, reindent_with_tabs=False):
     # Regex to find code blocks with optional language specification
     code_block_regex = r"```(\w+)?\n(.*?)\n```"

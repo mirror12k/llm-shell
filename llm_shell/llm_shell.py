@@ -9,7 +9,7 @@ import argparse
 
 import llm_shell.chatgpt_support
 import llm_shell.bedrock_support
-from llm_shell.util import get_prompt, shorten_output, apply_syntax_highlighting, start_spinner, slow_print
+from llm_shell.util import get_prompt, shorten_output, summarize_file, apply_syntax_highlighting, start_spinner, slow_print
 
 # Global flag to indicate if a command is currently running
 is_command_running = False
@@ -17,7 +17,9 @@ llm_backend = os.getenv('LLM_BACKEND', 'gpt-4-turbo')
 llm_instruction = "You are a programming assistant. Help the user build programs and resolve errors."
 llm_reindent_with_tabs = True
 context_file = None
+summary_file = None
 history = []
+version = '0.2.4'
 
 def execute_shell_command(cmd):
     global is_command_running
@@ -60,26 +62,24 @@ def send_to_llm(context):
         stop_spinner_callback = start_spinner()
 
         try:
-            # Include the llm_instruction in the context
-            context_with_instruction = [{"role": "system", "content": llm_instruction}] + context
-            response = support_llm_backends[llm_backend](context_with_instruction)
-            return response
+            return support_llm_backends[llm_backend](context)
         finally:
             stop_spinner_callback()
     else:
         raise Exception(f"LLM backend '{llm_backend}' is not supported yet.")
 
 def handle_command(command):
-    global history, llm_backend, llm_instruction, llm_reindent_with_tabs, context_file
+    global history, llm_backend, llm_instruction, llm_reindent_with_tabs, context_file, summary_file
 
     if command.lower() == 'help':
-        print("LLM Shell Help:")
+        print("LLM Shell v"+version+":")
         print("  help - Show this help message.")
         print("  exit - Exit the shell.")
         print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
         print("  llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).")
-        print("  llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode.")
+        print("  llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').")
         print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
+        print("  summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).")
         print("  # [command] - Use the hash sign to prefix any shell command for the language model to process.")
         print("  cd [directory] - Change the current working directory.")
         print("  [shell command] - Execute any standard shell command.")
@@ -130,6 +130,20 @@ def handle_command(command):
                     print(f"Warning: No files matched pattern '{arg}'")
             context_file = context_files if context_files else None
         print(f"Context file(s) set to {context_file}")
+    elif command.startswith('summary '):
+        summary_args = command[len('summary '):].strip().split()
+        summary_files = []
+        if len(summary_args) == 1 and summary_args[0].lower() == 'none':
+            summary_file = None
+        else:
+            for arg in summary_args:
+                expanded_files = glob.glob(arg)
+                if expanded_files:
+                    summary_files.extend(expanded_files)
+                else:
+                    print(f"Warning: No files matched pattern '{arg}'")
+            summary_file = summary_files if summary_files else None
+        print(f"Summary file(s) set to {summary_file}")
     elif command.startswith('#'):
         command = command[1:]  # Remove the '#'
 
@@ -138,6 +152,19 @@ def handle_command(command):
 
         # Add the last 5 entries from the history
         context.extend(history[-5:])
+
+        # Add the contents of the summary files if they're set
+        if summary_file is not None:
+            for file_path in summary_file:
+                try:
+                    with open(file_path, 'r') as file:
+                        file_contents = file.read()
+                        # Process lines to remove those starting with whitespace
+                        file_contents = summarize_file(file_contents)
+                        context.append({"role": "user", "content": f'$ cat {file_path} | summarize\n{file_contents}'})
+                except FileNotFoundError:
+                    print(f"Error: File '{file_path}' not found")
+
 
         # Add the contents of the context files if they're set
         if context_file is not None:
@@ -149,6 +176,7 @@ def handle_command(command):
                 except FileNotFoundError:
                     print(f"Error: File '{file_path}' not found")
 
+        context.append({"role": "system", "content": llm_instruction})
         # Append the current command
         context.append({"role": "user", "content": command})
 
@@ -168,12 +196,12 @@ def handle_command(command):
     # Keep only the last 5 entries in the history
     history = history[-5:]
 
-def complete(text, state):
+def autocomplete_string(text, state):
     full_input = readline.get_line_buffer()
     split_input = full_input.split()
 
     # Custom commands for autocompletion
-    custom_commands = ['llm-backend ', 'context ', 'llm-instruction ', 'llm-reindent-with-tabs ']
+    custom_commands = ['llm-backend ', 'context ', 'summary ', 'llm-instruction ', 'llm-reindent-with-tabs ']
 
     if full_input.startswith('llm-backend'):
         # Provide suggestions from the keys of support_llm_backends
@@ -193,7 +221,7 @@ def complete(text, state):
                 completions.append(item + '/')
             else:
                 completions.append(item)
-    elif text.startswith('llm') or text.startswith('co'):
+    elif text.startswith('llm') or text.startswith('co') or text.startswith('sum'):
         # If the current text matches the start of our custom commands, suggest them
         completions = [c for c in custom_commands if c.startswith(text)]
     else:
@@ -209,7 +237,7 @@ def complete(text, state):
 def run_llm_shell():
     # Set the tab completion function
     readline.set_completer_delims(' \t\n;')
-    readline.set_completer(complete)
+    readline.set_completer(autocomplete_string)
     readline.parse_and_bind('tab: complete')
 
     while True:
@@ -242,7 +270,7 @@ def main():
     # Initialize the argument parser
     parser = argparse.ArgumentParser(description='LLM Shell - A shell interface for interacting with language models.')
     # Add the version argument
-    parser.add_argument('-v', '--version', action='version', version='LLM Shell version 0.2.3')
+    parser.add_argument('-v', '--version', action='version', version='LLM Shell v' + version)
 
     # Parse the arguments
     args = parser.parse_args()
