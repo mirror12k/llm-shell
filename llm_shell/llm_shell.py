@@ -19,7 +19,7 @@ llm_reindent_with_tabs = True
 context_file = None
 summary_file = None
 history = []
-version = '0.2.4'
+version = '0.2.5'
 
 def execute_shell_command(cmd):
     global is_command_running
@@ -78,6 +78,7 @@ def handle_command(command):
         print("  llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).")
         print("  llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).")
         print("  llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').")
+        print("  llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.")
         print("  context [filename] - Set a file to use as context for the language model (use 'none' to clear).")
         print("  summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).")
         print("  # [command] - Use the hash sign to prefix any shell command for the language model to process.")
@@ -144,6 +145,14 @@ def handle_command(command):
                     print(f"Warning: No files matched pattern '{arg}'")
             summary_file = summary_files if summary_files else None
         print(f"Summary file(s) set to {summary_file}")
+    elif command.startswith('llm-chatgpt-apikey '):
+        api_key = command[len('llm-chatgpt-apikey '):].strip()
+        if api_key:
+            llm_shell.chatgpt_support.chatgpt_api_key = api_key
+            print("CHATGPT_API_KEY set successfully.")
+        else:
+            print("Please provide an API key after 'llm-chatgpt-apikey'.")
+
     elif command.startswith('#'):
         command = command[1:]  # Remove the '#'
 
@@ -201,7 +210,7 @@ def autocomplete_string(text, state):
     split_input = full_input.split()
 
     # Custom commands for autocompletion
-    custom_commands = ['llm-backend ', 'context ', 'summary ', 'llm-instruction ', 'llm-reindent-with-tabs ']
+    custom_commands = ['llm-backend ', 'llm-instruction ', 'llm-reindent-with-tabs ', 'llm-chatgpt-apikey ', 'context ', 'summary ']
 
     if full_input.startswith('llm-backend'):
         # Provide suggestions from the keys of support_llm_backends

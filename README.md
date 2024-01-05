@@ -72,6 +72,7 @@ To start the LLM-Shell, navigate to the `bin` directory and run the `llm_shell` 
 - `llm-backend [backend]` - Changes the LLM backend. Replace `[backend]` with one of the supported backends (e.g., `gpt-4-turbo`, `gpt-4`, `gpt-3.5-turbo`, `claude-instant-v1`, `claude-v2.1`).
 - `llm-instruction [instruction]` - Sets or updates the instruction for the LLM. Use this command to change how the LLM assists you.
 - `llm-reindent-with-tabs [true/false]` - Controls auto-reindent with tabs, to help when the LLM doesn't auto-detect it properly.
+- `llm-chatgpt-apikey [apikey]` - Set API key for OpenAI's models.
 - `context [filename1] [filename2] ...` - Sets one or multiple context files that will be used to provide additional information to the LLM. Use `context none` to clear the context files.
 - `summary [filename1] [filename2] ...` - Sets one or multiple summary files. Similar to `context`, but it will summarize the file before sending it to the LLM. Useful if you just want to send an outline of a class instead of the entire code.
 - `exit` - Exits LLM-Shell.
