@@ -104,7 +104,6 @@ class TestLLMShell(unittest.TestCase):
 				self.assertIn('content of file1', output[1])
 				self.assertIn('content of file2', output[1])
 
-
 	def test_multiple_py_files_in_summary(self):
 		# Set llm_config to use the 'hello-world' backend
 		llm_config['llm_backend'] = 'hello-world'
@@ -138,23 +137,31 @@ class TestLLMShell(unittest.TestCase):
 				self.assertIn('$ cat llm_shell/file1.py | summarize', output[1])
 				self.assertIn('$ cat llm_shell/file2.py | summarize', output[1])
 
-	def test_autocomplete_llm_she_to_llm_shell(self):
-		# Mock readline.get_line_buffer to return the partial text
-		with patch('readline.get_line_buffer', return_value='./llm'):
-			# Call the autocomplete function
-			completion = autocomplete_string('./llm', 0)
-			# Check if the completion is correct
-			self.assertEqual(completion, './llm_shell/')
-		with patch('readline.get_line_buffer', return_value='./llm_shell/ll'):
-			# Call the autocomplete function
-			completion = autocomplete_string('./llm_shell/ll', 0)
-			# Check if the completion is correct
-			self.assertEqual(completion, './llm_shell/llm_shell.py')
-		with patch('readline.get_line_buffer', return_value='llm-ins'):
-			# Call the autocomplete function
-			completion = autocomplete_string('llm-ins', 0)
-			# Check if the completion is correct
-			self.assertEqual(completion, 'llm-instruction ')
+	def test_autocomplete(self):
+		auto_corrections = [
+			('./llm', './llm_shell/'),
+			('./llm_shell/ll', './llm_shell/llm_shell.py'),
+			('llm-ins', 'llm-instruction '),
+			('con', 'context '),
+		]
+		for text, correction in auto_corrections:
+			# Mock readline.get_line_buffer to return the partial text
+			with patch('readline.get_line_buffer', return_value=text):
+				# Call the autocomplete function
+				completion = autocomplete_string(text, 0)
+				# Check if the completion is correct
+				self.assertEqual(completion, correction)
+
+	def test_regression_context_reading(self):
+		
+		# Mock glob to return a list of .py files
+		with patch('llm_shell.llm_shell.glob.glob', return_value=['llm_shell/file1.py', 'llm_shell/file2.py']):
+			# Set multiple .py files in context
+			with CaptureStdout() as output:
+				handle_command('context llm_shell/*.py')
+				handle_command('context')
+			# Verify if the context files are still correctly set
+			self.assertEqual(llm_config['context_file'], ['llm_shell/file1.py', 'llm_shell/file2.py'])
 
 
 if __name__ == '__main__':

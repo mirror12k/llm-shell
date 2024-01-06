@@ -97,9 +97,12 @@ def handle_llm_command(command):
 
 
 def set_file_arg(file_var, *args):
-    files = [] if len(args) == 1 and args[0].lower() == 'none' else [file for arg in args for file in glob.glob(arg) if file]
-    llm_config[file_var] = files
-    print(f"{file_var} file(s) set to {files}")
+    if len(args) > 0:
+        files = [] if len(args) == 1 and args[0].lower() == 'none' else [file for arg in args for file in glob.glob(arg) if file]
+        llm_config[file_var] = files
+        print(f"{file_var} file(s) set to {files}")
+    else:
+        print(f"{file_var} file(s): {llm_config[file_var]}")
 
 def set_config_arg(module, option, *value, custom_parser=None, censor_value=False):
     if type(module) is dict:
