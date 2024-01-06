@@ -12,7 +12,7 @@ import llm_shell.bedrock_support as bedrock_support
 from llm_shell.util import get_prompt, shorten_output, summarize_file, \
     apply_syntax_highlighting, start_spinner, slow_print
 
-version = '0.2.5'
+version = '0.2.6'
 is_command_running = False
 history = []
 llm_config = {
