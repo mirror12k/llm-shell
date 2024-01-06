@@ -86,17 +86,6 @@ class BarSpinner:
 # stop_threads = False
 def start_spinner():
     return BarSpinner()
-#     global stop_threads
-#     stop_threads = False
-#     spinner_thread = threading.Thread(target=spinner, args=(id, lambda: stop_threads))
-#     spinner_thread.start()
-#     return lambda: end_spinner(spinner_thread)  # Return the thread so it can be joined later
-
-# def end_spinner(spinner_thread):
-#     global stop_threads
-#     stop_threads = True
-#     spinner_thread.join()  # Wait for the spinner thread to finish
-#     print(' ', end='\r')  # Clear the spinner character
 
 def slow_print(msg, over_time=2):
     # Print the highlighted_response progressively over N seconds

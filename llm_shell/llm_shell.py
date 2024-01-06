@@ -95,59 +95,58 @@ def handle_llm_command(command):
     update_history("user", command)
     update_history("assistant", response)
 
-def handle_command(command):
-    global history
 
-    def set_file_arg(file_var, *args):
-        files = [] if args == ['none'] else [file for arg in args for file in glob.glob(arg) if file]
-        llm_config[file_var] = files
-        print(f"{file_var} file(s) set to {files}")
+def set_file_arg(file_var, *args):
+    files = [] if len(args) == 1 and args[0].lower() == 'none' else [file for arg in args for file in glob.glob(arg) if file]
+    llm_config[file_var] = files
+    print(f"{file_var} file(s) set to {files}")
 
-    def set_config_arg(module, option, *value, custom_parser=None, censor_value=False):
-        if type(module) is dict:
-            if len(value) > 0:
-                module[option] = ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip())
-                print('set ' + option + ' to', module[option] if not censor_value else '[...]')
-            else:
-                print(option + ':', module[option] if not censor_value else '[...]')
+def set_config_arg(module, option, *value, custom_parser=None, censor_value=False):
+    if type(module) is dict:
+        if len(value) > 0:
+            module[option] = ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip())
+            print('set ' + option + ' to', module[option] if not censor_value else '[...]')
         else:
-            if len(value) > 0:
-                setattr(module, option, ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip()))
-                print('set ' + option + ' to', getattr(module, option) if not censor_value else '[...]')
-            else:
-                print(option + ':', getattr(module, option) if not censor_value else '[...]')
+            print(option + ':', module[option] if not censor_value else '[...]')
+    else:
+        if len(value) > 0:
+            setattr(module, option, ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip()))
+            print('set ' + option + ' to', getattr(module, option) if not censor_value else '[...]')
+        else:
+            print(option + ':', getattr(module, option) if not censor_value else '[...]')
 
-    commands = {
-        'help': lambda: print("LLM Shell v"+version+""":
-    help - Show this help message.
-    exit - Exit the shell.
-    llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).
-    llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).
-    llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').
-    llm-history-length [5] - Set the length of history to send to llms. More history == more cost.
-    llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.
-    context [filename] - Set a file to use as context for the language model (use 'none' to clear).
-    summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).
-    # [command] - Use the hash sign to prefix any shell command for the language model to process.
-    cd [directory] - Change the current working directory.
-    [shell command] - Execute any standard shell command.
-    Use the tab key to autocomplete commands and file names."""),
-        'exit': sys.exit,
-        'cd': lambda path: os.chdir(path.strip()),
-        'llm-backend': partial(set_config_arg, llm_config, 'llm_backend'),
-        'llm-instruction': partial(set_config_arg, llm_config, 'llm_instruction'),
-        'llm-reindent-with-tabs': partial(set_config_arg, llm_config, 'llm_reindent_with_tabs', custom_parser=lambda s: s.lower() == 'true'),
-        'llm-history-length': partial(set_config_arg, llm_config, 'llm_history_length', custom_parser=lambda s: int(s)),
-        'llm-chatgpt-apikey': partial(set_config_arg, chatgpt_support, 'chatgpt_api_key', censor_value=True),
-        'context': partial(set_file_arg, 'context_file'),
-        'summary': partial(set_file_arg, 'summary_file'),
-    }
+commands = {
+    'help': lambda: print(f"""LLM Shell v{version}:
+help - Show this help message.
+exit - Exit the shell.
+llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).
+llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).
+llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').
+llm-history-length [5] - Set the length of history to send to llms. More history == more cost.
+llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.
+context [filename] - Set a file to use as context for the language model (use 'none' to clear).
+summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).
+# [command] - Use the hash sign to prefix any shell command for the language model to process.
+cd [directory] - Change the current working directory.
+[shell command] - Execute any standard shell command.
+Use the tab key to autocomplete commands and file names."""),
+    'exit': sys.exit,
+    'cd': lambda path: os.chdir(path.strip()),
+    'llm-backend': partial(set_config_arg, llm_config, 'llm_backend'),
+    'llm-instruction': partial(set_config_arg, llm_config, 'llm_instruction'),
+    'llm-reindent-with-tabs': partial(set_config_arg, llm_config, 'llm_reindent_with_tabs', custom_parser=lambda s: s.lower() == 'true'),
+    'llm-history-length': partial(set_config_arg, llm_config, 'llm_history_length', custom_parser=lambda s: int(s)),
+    'llm-chatgpt-apikey': partial(set_config_arg, chatgpt_support, 'chatgpt_api_key', censor_value=True),
+    'context': partial(set_file_arg, 'context_file'),
+    'summary': partial(set_file_arg, 'summary_file'),
+}
 
-    def process_standard_command():
-        output = execute_shell_command(command)
-        shortened_output = shorten_output(output)
-        update_history('user', f'$ {command}\n{shortened_output}')
+def process_standard_command(command):
+    output = execute_shell_command(command)
+    shortened_output = shorten_output(output)
+    update_history('user', f'$ {command}\n{shortened_output}')
 
+def handle_command(command):
     cmd_key, *args = command.split(maxsplit=1)
     cmd_key = cmd_key.lower()
     if cmd_key in commands:
@@ -157,7 +156,7 @@ def handle_command(command):
         command = command[1:] # Remove the '#'
         handle_llm_command(command)
     else:
-        process_standard_command()
+        process_standard_command(command)
 
 def autocomplete_string(text, state):
     full_input = readline.get_line_buffer()
