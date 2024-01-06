@@ -39,7 +39,7 @@ def send_to_bedrock(context, model):
     # Call the Bedrock AI model
     response = bedrock_runtime_client.invoke_model(
         body=body,
-        modelId='anthropic.claude-instant-v1',
+        modelId=model,
         accept='*/*',
         contentType='application/json'
     )
