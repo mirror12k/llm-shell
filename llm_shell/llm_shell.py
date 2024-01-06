@@ -19,6 +19,7 @@ llm_config = {
     'llm_backend': os.getenv('LLM_BACKEND', 'gpt-4-turbo'),
     'llm_instruction': "You are a programming assistant. Help the user build programs and resolve errors.",
     'llm_reindent_with_tabs': True,
+    'llm_history_length': 5,
     'context_file': [],
     'summary_file': [],
 }
@@ -60,7 +61,7 @@ def send_to_llm(context):
 def update_history(role, content):
     global history
     history.append({"role": role, "content": content})
-    history = history[-5:]
+    history = history[-llm_config['llm_history_length']:]
 
 def read_file_contents(file_path):
     try:
@@ -72,7 +73,7 @@ def read_file_contents(file_path):
 
 def handle_llm_command(command):
     # Prepare the context
-    context = history[-5:]
+    context = history[-llm_config['llm_history_length']:]
 
     # Add file contents to context with summarization or as is
     for file_var, summarize in (('summary_file', True), ('context_file', False)):
@@ -102,16 +103,16 @@ def handle_command(command):
         llm_config[file_var] = files
         print(f"{file_var} file(s) set to {files}")
 
-    def set_config_arg(module, option, *value, is_boolean=False, censor_value=False):
+    def set_config_arg(module, option, *value, custom_parser=None, censor_value=False):
         if type(module) is dict:
             if len(value) > 0:
-                module[option] = ' '.join(value).strip() if not is_boolean else ' '.join(value).strip().lower() == 'true'
+                module[option] = ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip())
                 print('set ' + option + ' to', module[option] if not censor_value else '[...]')
             else:
                 print(option + ':', module[option] if not censor_value else '[...]')
         else:
             if len(value) > 0:
-                setattr(module, option, ' '.join(value).strip() if not is_boolean else ' '.join(value).strip().lower() == 'true')
+                setattr(module, option, ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip()))
                 print('set ' + option + ' to', getattr(module, option) if not censor_value else '[...]')
             else:
                 print(option + ':', getattr(module, option) if not censor_value else '[...]')
@@ -123,6 +124,7 @@ def handle_command(command):
     llm-backend [backend] - Set the language model backend (e.g., gpt-4-turbo, gpt-4, gpt-3.5-turbo).
     llm-instruction [instruction] - Set the instruction for the language model (use 'none' to clear).
     llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defaults to 'true').
+    llm-history-length [5] - Set the length of history to send to llms. More history == more cost.
     llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.
     context [filename] - Set a file to use as context for the language model (use 'none' to clear).
     summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).
@@ -134,7 +136,8 @@ def handle_command(command):
         'cd': lambda path: os.chdir(path.strip()),
         'llm-backend': partial(set_config_arg, llm_config, 'llm_backend'),
         'llm-instruction': partial(set_config_arg, llm_config, 'llm_instruction'),
-        'llm-reindent-with-tabs': partial(set_config_arg, llm_config, 'llm_reindent_with_tabs', is_boolean=True),
+        'llm-reindent-with-tabs': partial(set_config_arg, llm_config, 'llm_reindent_with_tabs', custom_parser=lambda s: s.lower() == 'true'),
+        'llm-history-length': partial(set_config_arg, llm_config, 'llm_history_length', custom_parser=lambda s: int(s)),
         'llm-chatgpt-apikey': partial(set_config_arg, chatgpt_support, 'chatgpt_api_key', censor_value=True),
         'context': partial(set_file_arg, 'context_file'),
         'summary': partial(set_file_arg, 'summary_file'),
@@ -143,7 +146,7 @@ def handle_command(command):
     def process_standard_command():
         output = execute_shell_command(command)
         shortened_output = shorten_output(output)
-        history.append({"role": "user", "content": f'$ {command}\n{shortened_output}'})
+        update_history('user', f'$ {command}\n{shortened_output}')
 
     cmd_key, *args = command.split(maxsplit=1)
     cmd_key = cmd_key.lower()
@@ -155,14 +158,13 @@ def handle_command(command):
         handle_llm_command(command)
     else:
         process_standard_command()
-    history = history[-5:]
 
 def autocomplete_string(text, state):
     full_input = readline.get_line_buffer()
     split_input = full_input.split()
 
     # Custom commands for autocompletion
-    custom_commands = ['llm-backend ', 'llm-instruction ', 'llm-reindent-with-tabs ', 'llm-chatgpt-apikey ', 'context ', 'summary ']
+    custom_commands = ['llm-backend ', 'llm-instruction ', 'llm-reindent-with-tabs ', 'llm-history-length ', 'llm-chatgpt-apikey ', 'context ', 'summary ']
 
     if full_input.startswith('llm-backend'):
         # Provide suggestions from the keys of support_llm_backends
