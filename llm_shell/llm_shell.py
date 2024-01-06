@@ -36,9 +36,8 @@ def execute_shell_command(cmd):
     global is_command_running
     is_command_running = True
     output = []
-    env = os.environ.copy()
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, text=True, env=env)
+                               stderr=subprocess.STDOUT, text=True, env=os.environ)
     try:
         for line in iter(process.stdout.readline, ''):
             if line:
@@ -58,16 +57,50 @@ def send_to_llm(context):
     with start_spinner():
         return support_llm_backends[llm_config['llm_backend']](context)
 
+def update_history(role, content):
+    global history
+    history.append({"role": role, "content": content})
+    history = history[-5:]
+
+def read_file_contents(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return file.read()
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found")
+        return None
+
+def handle_llm_command(command):
+    # Prepare the context
+    context = history[-5:]
+
+    # Add file contents to context with summarization or as is
+    for file_var, summarize in (('summary_file', True), ('context_file', False)):
+        for file_path in llm_config[file_var]:
+            file_contents = read_file_contents(file_path)
+            if file_contents:
+                if summarize:
+                    file_contents = summarize_file(file_contents)
+                context.append({"role": "user", "content": f'$ cat {file_path}{" | summarize" if summarize else ""}\n{file_contents}'})
+
+    context.append({"role": "system", "content": llm_config['llm_instruction']})
+    context.append({"role": "user", "content": command})
+
+    # Send to LLM and process response
+    response = send_to_llm(context)
+    highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
+    slow_print(highlighted_response)
+
+    update_history("user", command)
+    update_history("assistant", response)
+
 def handle_command(command):
     global history
 
     def set_file_arg(file_var, *args):
-        if len(args) == 0:
-            print(f"{file_var} file(s) currently: {llm_config[file_var]}")
-        else:
-            files = [] if args == ['none'] else [file for arg in args for file in glob.glob(arg) if file]
-            llm_config[file_var] = files
-            print(f"{file_var} file(s) set to {files}")
+        files = [] if args == ['none'] else [file for arg in args for file in glob.glob(arg) if file]
+        llm_config[file_var] = files
+        print(f"{file_var} file(s) set to {files}")
 
     def set_config_arg(module, option, *value, is_boolean=False, censor_value=False):
         if type(module) is dict:
@@ -119,46 +152,7 @@ def handle_command(command):
         commands[cmd_key](*arguments)
     elif command.startswith('#'):
         command = command[1:] # Remove the '#'
-
-        # Prepare the context
-        context = []
-
-        # Add the last 5 entries from the history
-        context.extend(history[-5:])
-
-        # Add the contents of the summary files if they're set
-        for file_path in llm_config['summary_file']:
-            try:
-                with open(file_path, 'r') as file:
-                    file_contents = file.read()
-                    # Process lines to remove those starting with whitespace
-                    file_contents = summarize_file(file_contents)
-                    context.append({"role": "user", "content": f'$ cat {file_path} | summarize\n{file_contents}'})
-            except FileNotFoundError:
-                print(f"Error: File '{file_path}' not found")
-
-
-        # Add the contents of the context files if they're set
-        for file_path in llm_config['context_file']:
-            try:
-                with open(file_path, 'r') as file:
-                    file_contents = file.read()
-                    context.append({"role": "user", "content": f'$ cat {file_path}\n{file_contents}'})
-            except FileNotFoundError:
-                print(f"Error: File '{file_path}' not found")
-
-        context.append({"role": "system", "content": llm_config['llm_instruction']})
-        # Append the current command
-        context.append({"role": "user", "content": command})
-
-        # Send to LLM and process response
-        response = send_to_llm(context)
-        highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
-        slow_print(highlighted_response)
-        # print(highlighted_response)
-
-        history.append({"role": "user", "content": command})
-        history.append({"role": "assistant", "content": response})
+        handle_llm_command(command)
     else:
         process_standard_command()
     history = history[-5:]
