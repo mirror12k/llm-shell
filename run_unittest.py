@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import sys
 import os
+import os.path
 import unittest
 import tempfile
 from unittest.mock import patch, Mock
 from io import StringIO
 from llm_shell.llm_shell import autocomplete_string, handle_command, llm_config
+from llm_shell.util import parse_diff_string, apply_changes
 
 # Define a helper context manager to capture stdout
 class CaptureStdout(list):
@@ -163,6 +165,73 @@ class TestLLMShell(unittest.TestCase):
 			# Verify if the context files are still correctly set
 			self.assertEqual(llm_config['context_file'], ['llm_shell/file1.py', 'llm_shell/file2.py'])
 
+
+class TestLLMAgent(unittest.TestCase):
+
+	def test_write_new_file(self):
+		diff_response = '''
+My diff:
+/tmp/flask.py
+```
+<<<<<<< SEARCH
+=======
+from flask import Flask
+app = Flask(__name__)
+@app.route('/')
+def hello_world():
+	return 'Hello, World!'
+if __name__ == '__main__':
+	app.run(debug=True)
+>>>>>>> REPLACE
+
+```
+That was my diff.
+'''
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, '''from flask import Flask
+app = Flask(__name__)
+@app.route('/')
+def hello_world():
+	return 'Hello, World!'
+if __name__ == '__main__':
+	app.run(debug=True)''', 'Expected flask.py contents match diff')
+		os.remove('/tmp/flask.py')
+
+	def test_edit_file(self):
+		with open('/tmp/flask.py', 'w') as f:
+			f.write('from flask import Flask')
+
+		diff_response = '''
+My diff:
+/tmp/flask.py
+```
+<<<<<<< SEARCH
+from flask import Flask
+=======
+from flask import Flask
+import sys
+>>>>>>> REPLACE
+```
+That was my diff.
+'''
+
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, '''from flask import Flask
+import sys''', 'Expected flask.py contents match diff')
+
+		os.remove('/tmp/flask.py')
+
+		
 
 if __name__ == '__main__':
 	unittest.main()

@@ -1,4 +1,5 @@
 import os
+import os.path
 import re
 import getpass
 from pygments import highlight
@@ -6,8 +7,17 @@ from pygments.lexers import get_lexer_by_name
 from pygments.formatters import TerminalFormatter
 import threading
 import time
+import json
 
 
+
+def read_file_contents(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return file.read()
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found")
+        return None
 
 def color_text(text, color_code):
     ANSI_RESET = '\033[0m'  # Reset all attributes
@@ -24,10 +34,13 @@ def bold_red_and_black_background(text):
     return color_text(text, ANSI_BLACK_BG + ANSI_BOLD_RED)
 
 # Function to generate the prompt
-def get_prompt(llm_backend):
+def get_prompt(llm_backend, llm_agent):
     user = getpass.getuser()
     cwd = os.getcwd()
-    return f"{user}:{cwd} {bold_red_and_black_background(f'<<{llm_backend}>>')}$ "
+    if llm_agent:
+        return f"{user}:{cwd} {bold_red_and_black_background(f'AGENT<<{llm_backend}>>')}$ "
+    else:
+        return f"{user}:{cwd} {bold_red_and_black_background(f'<<{llm_backend}>>')}$ "
 
 
 def shorten_output(output):
@@ -98,3 +111,85 @@ def slow_print(msg, over_time=2):
         time.sleep(delay_per_char)
     print('')
 
+def parse_diff_string(diff_string):
+    # Define a regex pattern to match the whole block of text for each file
+    pattern = re.compile(r'(`?)([^\n]*?)\1\n'  # Match the file path
+                         r'```(?:.*?)\n'           # Match the start fence
+                         r'<<<<<<< SEARCH\n'              # Match the start of the search block
+                         r'(.*?)\n?'                        # Capture the search content
+                         r'=======\n'                      # Match the divider
+                         r'(.*?)\n?'                        # Capture the replace content
+                         r'>>>>>>> REPLACE\n+',              # Match the end of the replace block
+                         # r'```',                 # Match the end fence
+                         re.DOTALL)                        # DOTALL flag to match across newlines
+
+    # Find all matches in the input string
+    matches = pattern.findall(diff_string)
+
+    # Extract the file path, search string, and replace string from each match
+    diff_data = []
+    for match in matches:
+        file_path = match[1].strip()
+        search_string = match[2].strip()
+        replace_string = match[3].strip()
+        diff_data.append((file_path, search_string, replace_string))
+
+        if '\n=======\n' in search_string:
+            print("[!!!] this doesn't look correct:", search_string)
+
+    return diff_data
+
+def apply_changes(filepath, search_block, replace_block):
+    # Read the current contents of the file
+    if os.path.isfile(filepath):
+        with open(filepath, 'r') as file:
+            file_contents = file.read()
+    else:
+        file_contents = ''
+
+    # Replace the search block with the replace block
+    if search_block in file_contents:
+        file_contents = file_contents.replace(search_block, replace_block, 1)
+    else:
+        print(f"Search block {{ {search_block} }} not found in '{filepath}'. No changes made.")
+        return False
+
+    # Write the modified contents back to the file
+    with open(filepath, 'w') as file:
+        file.write(file_contents)
+    print(f"Changes applied to '{filepath}'.")
+    return True
+
+def save_llm_config_to_file(config_path, llm_config):
+    try:
+        with open(config_path, 'w') as config_file:
+            json.dump(llm_config, config_file, indent=4)
+        # print(f"Config saved to {config_path}")
+    except Exception as e:
+        pass
+        # print(f"Error saving config to {config_path}: {e}")
+
+def load_llm_config_from_file(config_path, llm_config):
+    try:
+        with open(config_path, 'r') as config_file:
+            loaded_config = json.load(config_file)
+            for key, value in loaded_config.items():
+                if key in llm_config:
+                    llm_config[key] = value
+            # print(f"Config loaded from {config_path}")
+    except FileNotFoundError:
+        pass
+    except json.JSONDecodeError as e:
+        print(f"Error decoding the config file at {config_path}: {e}")
+    except Exception as e:
+        print(f"Error loading config from {config_path}: {e}")
+
+def record_debug_history(context, response):
+    debug_history_path = os.path.join(os.path.expanduser('~'), '.llm_shell_debug_history')
+    debug_entry = {
+        'context': context,
+        'response': response
+    }
+    with open(debug_history_path, 'a') as debug_file:
+        json.dump(debug_entry, debug_file)
+        debug_file.write('\n') # Write a newline to separate entries

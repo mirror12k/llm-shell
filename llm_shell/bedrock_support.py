@@ -28,7 +28,7 @@ def send_to_bedrock(context, model):
     # Prepare the body of the request
     body = json.dumps({
         "prompt": prompt,
-        "max_tokens_to_sample": 300,
+        "max_tokens_to_sample": 30000,
         "temperature": 0.5,
         "top_k": 250,
         "top_p": 1,
