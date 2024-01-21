@@ -113,31 +113,78 @@ def slow_print(msg, over_time=2):
 
 def parse_diff_string(diff_string):
     # Define a regex pattern to match the whole block of text for each file
-    pattern = re.compile(r'(`?)([^\n]*?)\1\n'  # Match the file path
-                         r'```(?:.*?)\n'           # Match the start fence
-                         r'<<<<<<< SEARCH\n'              # Match the start of the search block
-                         r'(.*?)\n?'                        # Capture the search content
-                         r'=======\n'                      # Match the divider
-                         r'(.*?)\n?'                        # Capture the replace content
-                         r'>>>>>>> REPLACE\n+',              # Match the end of the replace block
-                         # r'```',                 # Match the end fence
-                         re.DOTALL)                        # DOTALL flag to match across newlines
+    pattern = re.compile(
+        r'(?:(`?)([^\n]*?)\1\n)?'  # Match the file path (optional)
+        r'```(?:[^\n]*?)\n?'   # Match the start fence (optional code type such as "py")
+        r'(?:(`?)([^\n]*?)\3\n)?'   # Match the start fence (optional code type such as "py")
+        r'<<<<<<<[ ]*SEARCH\n'  # Match the start of the search block (optional SEARCH)
+        r'(.*?)\n?'             # Capture the search content
+        r'=======\n'         # Match the divider (optional)
+        r'(.*?)\n?'             # Capture the replace content
+        r'>>>>>>>[ ]*REPLACE\n', # Match the end of the replace block (optional REPLACE)
+        # r'```',                 # Match the end fence
+        re.DOTALL)
+
 
     # Find all matches in the input string
     matches = pattern.findall(diff_string)
 
     # Extract the file path, search string, and replace string from each match
     diff_data = []
+    last_filepath = None  # Keep track of the last known filepath
     for match in matches:
-        file_path = match[1].strip()
-        search_string = match[2].strip()
-        replace_string = match[3].strip()
-        diff_data.append((file_path, search_string, replace_string))
+        # Check if a filepath is specified in the current match; if not, use the last known filepath
+        filepath = match[3].strip() or match[1].strip() or last_filepath
+        search_string = match[4].strip()
+        replace_string = match[5].strip()
 
-        if '\n=======\n' in search_string:
-            print("[!!!] this doesn't look correct:", search_string)
+        last_filepath = filepath
+        diff_data.append((filepath, search_string, replace_string))
+
 
     return diff_data
+
+def search_change_lines(file_lines, raw_search_lines, indentation_count=0):
+    search_lines = [' ' * indentation_count + line for line in raw_search_lines]
+    # Find the start index and end index of the search block within the file contents
+    match_index = -1
+    end_match_index = -1
+    for i in range(len(file_lines)):
+        # Only iterate through non-empty lines for matching the search block
+        if file_lines[i].strip() == '':
+            continue
+        # Match the first non-empty line of the search block
+        # print("loop enter:", i, '->', file_lines, ",", search_lines)
+        if file_lines[i] == search_lines[0]:
+            match_index = i
+            search_index = 1
+            last_j = i+1
+            # Check if the following non-empty lines match the rest of the search block
+            for j in range(i + 1, len(file_lines)):
+                last_j = j+1
+                if search_index == len(search_lines):
+                    break
+                elif file_lines[j].strip() == '':
+                    continue
+                elif file_lines[j] == search_lines[search_index]:
+                    search_index += 1
+                    if search_index == len(search_lines):
+                        break
+                else:
+                    break
+            if search_index == len(search_lines):
+                end_match_index = last_j
+                break
+
+    if match_index != -1 and end_match_index != -1:
+        return match_index, end_match_index, indentation_count
+    elif indentation_count < 40:
+        # Indent the search lines by two spaces and try again
+        return search_change_lines(file_lines, raw_search_lines, indentation_count + 2)
+    else:
+        # Maximum attempts reached, no match found
+        return -1, -1, 0
+
 
 def apply_changes(filepath, search_block, replace_block):
     # Read the current contents of the file
@@ -145,20 +192,38 @@ def apply_changes(filepath, search_block, replace_block):
         with open(filepath, 'r') as file:
             file_contents = file.read()
     else:
-        file_contents = ''
+        # Write the new contents back to the file
+        with open(filepath, 'w') as file:
+            file.write(replace_block)
+        return True
 
-    # Replace the search block with the replace block
-    if search_block in file_contents:
-        file_contents = file_contents.replace(search_block, replace_block, 1)
+    # Replace tabs and split the blocks
+    file_contents = file_contents.replace('\t', '    ')
+    search_block = search_block.replace('\t', '    ')
+    replace_block = replace_block.replace('\t', '    ')
+    file_lines = file_contents.splitlines()
+    search_lines = [line for line in search_block.splitlines() if line.strip()]
+    replace_lines = replace_block.splitlines()
+
+    match_index, end_match_index, indentation_count = search_change_lines(file_lines, search_lines)
+
+    # print(f'match result: [{match_index}:{end_match_index}]')
+    if match_index != -1 and end_match_index != -1:
+        # Replace the matched lines with the replace block lines
+        indented_replace_lines = [' ' * indentation_count + line for line in replace_lines]
+        file_lines[match_index:end_match_index] = indented_replace_lines
+        # Join the lines back into a single string
+        new_file_contents = '\n'.join(file_lines)
+
+        # Write the modified contents back to the file
+        with open(filepath, 'w') as file:
+            file.write(new_file_contents)
+        print(f"Changes applied to '{filepath}'.")
+        return True
     else:
-        print(f"Search block {{ {search_block} }} not found in '{filepath}'. No changes made.")
+        print(f"Search block not found in '{filepath}'. No changes made.")
         return False
 
-    # Write the modified contents back to the file
-    with open(filepath, 'w') as file:
-        file.write(file_contents)
-    print(f"Changes applied to '{filepath}'.")
-    return True
 
 def save_llm_config_to_file(config_path, llm_config):
     try:

@@ -169,6 +169,9 @@ class TestLLMShell(unittest.TestCase):
 class TestLLMAgent(unittest.TestCase):
 
 	def test_write_new_file(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+
 		diff_response = '''
 My diff:
 /tmp/flask.py
@@ -202,7 +205,95 @@ if __name__ == '__main__':
 	app.run(debug=True)''', 'Expected flask.py contents match diff')
 		os.remove('/tmp/flask.py')
 
+	def test_write_more_file(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+
+		diff_response = '''
+My diff:
+`/tmp/flask.py`
+```
+<<<<<<< SEARCH
+=======
+from flask import Flask
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+from flask import Flask
+=======
+import sys
+from flask import Flask
+>>>>>>> REPLACE
+```
+
+That was my diff.
+'''
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, '''import sys
+from flask import Flask''', 'Expected flask.py contents match diff')
+		os.remove('/tmp/flask.py')
+
+	def test_write_multi_file(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+		if os.path.isfile('/tmp/runtest.py'):
+			os.remove('/tmp/runtest.py')
+
+		diff_response = '''
+My diff:
+```
+/tmp/flask.py
+<<<<<<< SEARCH
+=======
+from flask import Flask
+>>>>>>> REPLACE
+```
+
+```
+`/tmp/runtest.py`
+<<<<<<< SEARCH
+=======
+import unittest
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+import unittest
+=======
+import unittest
+import sys
+>>>>>>> REPLACE
+```
+
+That was my diff.
+'''
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		self.assertTrue(os.path.isfile('/tmp/runtest.py'), 'Expected /tmp/runtest.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, '''from flask import Flask''', 'Expected flask.py contents match diff')
+		with open('/tmp/runtest.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, '''import unittest
+import sys''', 'Expected runtest.py contents match diff')
+		os.remove('/tmp/flask.py')
+		os.remove('/tmp/runtest.py')
+
 	def test_edit_file(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+
 		with open('/tmp/flask.py', 'w') as f:
 			f.write('from flask import Flask')
 
@@ -231,7 +322,103 @@ import sys''', 'Expected flask.py contents match diff')
 
 		os.remove('/tmp/flask.py')
 
-		
+	def test_edit_file_with_spacing(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+
+		with open('/tmp/flask.py', 'w') as f:
+			f.write('from flask import Flask\n\n\nprint("hello")')
+
+		diff_response = '''
+My diff:
+/tmp/flask.py
+```
+<<<<<<< SEARCH
+from flask import Flask
+print("hello")
+=======
+import sys
+print(sys.argv)
+print("hello")
+>>>>>>> REPLACE
+```
+That was my diff.
+'''
+
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, '''import sys
+print(sys.argv)
+print("hello")''', 'Expected flask.py contents match diff')
+
+		os.remove('/tmp/flask.py')
+
+	def test_edit_file_with_mess(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+
+		with open('/tmp/flask.py', 'w') as f:
+			f.write('from flask import Flask\nimport asdf\n\n\nprint("hello")\nprint("wat?")')
+
+		diff_response = '''
+My diff:
+/tmp/flask.py
+```
+<<<<<<< SEARCH
+import asdf
+print("hello")
+=======
+import sys
+
+print("goodbye")
+>>>>>>> REPLACE
+```
+That was my diff.
+'''
+
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, 'from flask import Flask\nimport sys\n\nprint("goodbye")\nprint("wat?")', 'Expected flask.py contents match diff')
+
+		os.remove('/tmp/flask.py')
+
+	def test_edit_file_with_underindented_code(self):
+		if os.path.isfile('/tmp/flask.py'):
+			os.remove('/tmp/flask.py')
+
+		with open('/tmp/flask.py', 'w') as f:
+			f.write('from flask import Flask\ndef myfun():\n\tprint("hello")\n\n\tprint("wat?")')
+
+		diff_response = '''/tmp/flask.py
+```
+<<<<<<< SEARCH
+print("hello")
+print("wat?")
+=======
+if True:
+    print("hello")
+>>>>>>> REPLACE
+```'''
+
+		for filepath, search_block, replace_block in parse_diff_string(diff_response):
+			print(f"Applying changes to {filepath}...")
+			self.assertTrue(apply_changes(filepath, search_block, replace_block), 'Expected apply changes to succeed')
+		self.assertTrue(os.path.isfile('/tmp/flask.py'), 'Expected /tmp/flask.py to be a file')
+		with open('/tmp/flask.py', 'r') as f:
+			contents = f.read()
+		self.assertEqual(contents, 'from flask import Flask\ndef myfun():\n    if True:\n        print("hello")', 'Expected flask.py contents match diff')
+
+		os.remove('/tmp/flask.py')
+
+
 
 if __name__ == '__main__':
 	unittest.main()

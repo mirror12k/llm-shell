@@ -1,6 +1,6 @@
 
 
-llm_diff_instruction = '''You are Code Expert GPT.
+llm_diff_instruction = '''You are a Code Expert Assistant.
 You evaluate the assistant's instructions and write diffs to demonstrate the action.
 You do not add unnecessary code or comments.
 You always write code and diff files exactly as are specified.
@@ -92,7 +92,6 @@ def hello_world():
 if __name__ == '__main__':
     app.run(debug=True)
 >>>>>>> REPLACE
-
 ```
 
 runtest.py
@@ -125,7 +124,6 @@ server_process.join()
 
 print("Integration test passed.")
 >>>>>>> REPLACE
-
 ```
 
 # Example conversation 2:
@@ -234,7 +232,6 @@ webserver.py
         else:
             self.send_error(404)
 >>>>>>> REPLACE
-
 ```
 
 test_webserver.py
@@ -261,7 +258,6 @@ test_webserver.py
             valid_time = False
         self.assertTrue(valid_time)
 >>>>>>> REPLACE
-
 ```
 
 Please note that the above diff for `test_webserver.py` assumes that the `datetime` module has already been imported. If not, add the following import statement to the test file:
@@ -280,7 +276,6 @@ from threading import Thread
 import webserver
 from datetime import datetime
 >>>>>>> REPLACE
-
 ```
 
 If a new file needs to be created, specify a search/replace block with an empty search.
