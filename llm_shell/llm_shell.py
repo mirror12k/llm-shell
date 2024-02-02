@@ -16,7 +16,6 @@ from llm_shell.util import read_file_contents, get_prompt, shorten_output, summa
     save_llm_config_to_file, load_llm_config_from_file, record_debug_history
 
 version = '0.2.8'
-is_command_running = False
 history = []
 llm_config = {
     'llm_backend': os.getenv('LLM_BACKEND', 'gpt-4-turbo'),
@@ -39,8 +38,6 @@ support_llm_backends = {
 }
 
 def execute_shell_command(cmd):
-    global is_command_running
-    is_command_running = True
     output = []
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, env=os.environ)
@@ -53,8 +50,6 @@ def execute_shell_command(cmd):
     except KeyboardInterrupt:
         process.kill()
         print("^C")
-    finally:
-        is_command_running = False
     return ''.join(output)
 
 def send_to_llm(context):
@@ -117,6 +112,7 @@ def set_file_arg(file_var, *args):
         files = [] if len(args) == 1 and args[0].lower() == 'none' else [file for arg in args for file in glob.glob(arg) if file]
         llm_config[file_var] = files
         print(f"{file_var} file(s) set to {files}")
+        save_llm_config_to_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
     else:
         print(f"{file_var} file(s): {llm_config[file_var]}")
 
@@ -126,14 +122,17 @@ def set_config_arg(module, option, *value, custom_parser=None, censor_value=Fals
             module[option] = ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip())
             print('set ' + option + ' to', module[option] if not censor_value else '[...]')
             save_llm_config_to_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
+            if option.startswith('experimental_'):
+                print('\t warning: you are setting an experimental option. make sure you know what youre doing!')
         else:
             print(option + ':', module[option] if not censor_value else '[...]')
     else:
         if len(value) > 0:
             setattr(module, option, ' '.join(value).strip() if not custom_parser else custom_parser(' '.join(value).strip()))
             print('set ' + option + ' to', getattr(module, option) if not censor_value else '[...]')
-            if module == llm_config:  # Check if the module is llm_config before saving
-                save_llm_config_to_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
+            save_llm_config_to_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
+            if option.startswith('experimental_'):
+                print('\t warning: you are setting an experimental option. make sure you know what youre doing!')
         else:
             print(option + ':', getattr(module, option) if not censor_value else '[...]')
 
