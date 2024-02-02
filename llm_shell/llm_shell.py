@@ -12,7 +12,7 @@ import llm_shell.chatgpt_support as chatgpt_support
 import llm_shell.bedrock_support as bedrock_support
 from llm_shell.util import read_file_contents, get_prompt, shorten_output, summarize_file, \
     apply_syntax_highlighting, start_spinner, slow_print, \
-    parse_diff_string, apply_changes, \
+    parse_bash_string, parse_diff_string, apply_changes, \
     save_llm_config_to_file, load_llm_config_from_file, record_debug_history
 
 version = '0.2.8'
@@ -23,6 +23,8 @@ llm_config = {
     'llm_reindent_with_tabs': True,
     'llm_history_length': 5,
     'experimental_llm_agent': False,
+    'experimental_verifier_command': None,
+    'experimental_bash_agent': None,
     'context_file': [],
     'summary_file': [],
     'record_debug_history': False,  # Add a new config option for recording debug history
@@ -50,7 +52,9 @@ def execute_shell_command(cmd):
     except KeyboardInterrupt:
         process.kill()
         print("^C")
-    return ''.join(output)
+    if process.returncode != 0:
+        print('process exited with code: ', process.returncode)
+    return ''.join(output), process.returncode
 
 def send_to_llm(context):
     if llm_config['llm_backend'] not in support_llm_backends:
@@ -62,6 +66,11 @@ def update_history(role, content):
     global history
     history.append({"role": role, "content": content})
     history = history[-llm_config['llm_history_length']:]
+
+def execute_verifier_command(verifier_command):
+    if verifier_command:
+        print(f"Executing verifier command: {verifier_command}")
+        process_standard_command(verifier_command)
 
 def handle_llm_command(command):
     # Prepare the context
@@ -107,6 +116,91 @@ def handle_llm_command(command):
             print(f"Applying changes to {filepath}...")
             apply_changes(filepath, search_block, replace_block)
 
+        # Execute the verifier command after applying changes
+        if llm_config['experimental_verifier_command']:
+            exit_code = execute_verifier_command(llm_config['experimental_verifier_command'])
+
+def handle_llm_bash_agent_loop(command):
+    next_command = command
+    while handle_llm_bash_agent_command(next_command) > 0:
+        print("\t analyzing the results of the user's request")
+        analysis_command = handle_llm_bash_agent_analysis()
+        next_command = analysis_command
+        print("\t continuing bash agent loop...")
+    print("no commands executed, bash agent complete!")
+
+def handle_llm_bash_agent_command(command):
+    # Prepare the context
+    context = history[-llm_config['llm_history_length']*2:]
+
+    instruction = '''You are a bash agent.
+Plan and write the bash commands to be executed in this shell to implement the user's requests.
+Anything outside of triple markdown quotes will be ignored.
+All bash commands to be executed should within markdown quotes with the type "sh":
+
+```sh
+echo asdf > whoami
+ls -la
+```
+
+Another example:
+
+```sh
+echo 'print("Hello, World!")' > hello_world.py
+python3 hello_world.py
+```
+
+All bash commands will be executed unless a command exits with a non-zero exit code.
+Do not use multi-line commands. Only single line commands will execute successfully.
+Make sure to add verification commands to check that our executions were successful.
+When the user's task is completed, output no commands to indicate a completed job.
+'''
+
+    context.append({"role": "system", "content": instruction})
+    context.append({"role": "user", "content": command})
+
+    # Send to LLM and process response
+    response = send_to_llm(context)
+    # highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
+    slow_print(response)
+
+    update_history("user", command)
+    update_history("assistant", response)
+
+    commands_executed = 0
+    for command in parse_bash_string(response):
+        commands_executed += 1
+        print('executing $', command)
+        exit_code = process_standard_command(command)
+        if exit_code != 0:
+            break
+    return commands_executed
+
+def handle_llm_bash_agent_analysis():
+    # Prepare the context
+    context = history[-llm_config['llm_history_length']*2:]
+
+    instruction = '''You are an analysis tool.
+Analyze whether the assistant correct implemented the user's request.
+If the request is complete, state it as such. Emphasis that no additional commands should be executed.
+If the request is incomplete, write next set of instructions for the bash agent.
+
+Be clear and concise.
+Explain what went wrong, explain what went right.
+Restate the user's request, and state the next steps to the bash agent.
+'''
+
+    context.append({"role": "system", "content": instruction})
+
+    # Send to LLM and process response
+    response = send_to_llm(context)
+    # highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
+    slow_print(response)
+
+    return response
+    
+
+
 def set_file_arg(file_var, *args):
     if len(args) > 0:
         files = [] if len(args) == 1 and args[0].lower() == 'none' else [file for arg in args for file in glob.glob(arg) if file]
@@ -123,7 +217,7 @@ def set_config_arg(module, option, *value, custom_parser=None, censor_value=Fals
             print('set ' + option + ' to', module[option] if not censor_value else '[...]')
             save_llm_config_to_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
             if option.startswith('experimental_'):
-                print('\t warning: you are setting an experimental option. make sure you know what youre doing!')
+                print('\t warning: you are setting an experimental option. make sure you know what you\'re doing!')
         else:
             print(option + ':', module[option] if not censor_value else '[...]')
     else:
@@ -132,7 +226,7 @@ def set_config_arg(module, option, *value, custom_parser=None, censor_value=Fals
             print('set ' + option + ' to', getattr(module, option) if not censor_value else '[...]')
             save_llm_config_to_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
             if option.startswith('experimental_'):
-                print('\t warning: you are setting an experimental option. make sure you know what youre doing!')
+                print('\t warning: you are setting an experimental option. make sure you know what you\'re doing!')
         else:
             print(option + ':', getattr(module, option) if not censor_value else '[...]')
 
@@ -146,6 +240,8 @@ llm-reindent-with-tabs [true/false] - Set the llm_reindent_with_tabs mode (defau
 llm-history-length [5] - Set the length of history to send to llms. More history == more cost.
 llm-chatgpt-apikey [apikey] - Set API key for OpenAI's models.
 llm-experimental-agent [true/false] - Allows the llm to write/edit files on its own. Beware: highly experimental.
+llm-experimental-verifier [./run_unittest.py] - Gives a command to run your unit tests and verify after the llm-agent has completed. Beware: highly experimental.
+llm-experimental-bash-agent [true/false] - Runs a looping bash agent with your request. Beware: highly experimental.
 context [filename] - Set a file to use as context for the language model (use 'none' to clear).
 summary [filename] - Set a summary file to use as context for the language model (use 'none' to clear).
 # [command] - Use the hash sign to prefix any shell command for the language model to process.
@@ -158,6 +254,8 @@ Use the tab key to autocomplete commands and file names."""),
     'llm-instruction': partial(set_config_arg, llm_config, 'llm_instruction'),
     'llm-reindent-with-tabs': partial(set_config_arg, llm_config, 'llm_reindent_with_tabs', custom_parser=lambda s: s.lower() == 'true'),
     'llm-experimental-agent': partial(set_config_arg, llm_config, 'experimental_llm_agent', custom_parser=lambda s: s.lower() == 'true'),
+    'llm-experimental-bash-agent': partial(set_config_arg, llm_config, 'experimental_bash_agent', custom_parser=lambda s: s.lower() == 'true'),
+    'llm-experimental-verifier': partial(set_config_arg, llm_config, 'experimental_verifier_command'),
     'llm-record-debug-history': partial(set_config_arg, llm_config, 'record_debug_history', custom_parser=lambda s: s.lower() == 'true'),
     'llm-history-length': partial(set_config_arg, llm_config, 'llm_history_length', custom_parser=lambda s: int(s)),
     'llm-chatgpt-apikey': partial(set_config_arg, chatgpt_support, 'chatgpt_api_key', censor_value=True),
@@ -166,9 +264,13 @@ Use the tab key to autocomplete commands and file names."""),
 }
 
 def process_standard_command(command):
-    output = execute_shell_command(command)
+    output, exit_code = execute_shell_command(command)
     shortened_output = shorten_output(output)
-    update_history('user', f'$ {command}\n{shortened_output}')
+    if exit_code == 0:
+        update_history('user', f'$ {command}\n{shortened_output}')
+    else:
+        update_history('user', f'$ {command}\n{shortened_output}\nexit_code: {exit_code}')
+    return exit_code
 
 def handle_command(command):
     cmd_key, *args = command.split(maxsplit=1)
@@ -178,7 +280,10 @@ def handle_command(command):
         commands[cmd_key](*arguments)
     elif command.startswith('#'):
         command = command[1:] # Remove the '#'
-        handle_llm_command(command)
+        if llm_config['experimental_verifier_command']:
+            handle_llm_bash_agent_loop(command)
+        else:
+            handle_llm_command(command)
     else:
         process_standard_command(command)
 

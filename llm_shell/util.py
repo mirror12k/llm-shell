@@ -101,15 +101,16 @@ def start_spinner():
     return BarSpinner()
 
 def slow_print(msg, over_time=2):
-    # Print the highlighted_response progressively over N seconds
-    total_time = over_time # total time to print the message
-    num_chars = len(msg)
-    delay_per_char = min(total_time / num_chars, 0.01)
+    if len(msg) > 0:
+        # Print the highlighted_response progressively over N seconds
+        total_time = over_time # total time to print the message
+        num_chars = len(msg)
+        delay_per_char = min(total_time / num_chars, 0.01)
 
-    for char in msg:
-        print(char, end='', flush=True)
-        time.sleep(delay_per_char)
-    print('')
+        for char in msg:
+            print(char, end='', flush=True)
+            time.sleep(delay_per_char)
+        print('')
 
 def parse_diff_string(diff_string):
     # Define a regex pattern to match the whole block of text for each file
@@ -135,6 +136,8 @@ def parse_diff_string(diff_string):
     for match in matches:
         # Check if a filepath is specified in the current match; if not, use the last known filepath
         filepath = match[3].strip() or match[1].strip() or last_filepath
+        if '.' not in filepath and '/' not in filepath and match[1].strip():
+            filepath = match[1].strip()
         search_string = match[4].strip()
         replace_string = match[5].strip()
 
@@ -143,6 +146,24 @@ def parse_diff_string(diff_string):
 
 
     return diff_data
+
+def parse_bash_string(diff_string):
+    # Define a regex pattern to match the whole block of text for each file
+    pattern = re.compile(
+        r'```(?:sh|bash)\n'
+        r'(.*?)\n?'
+        r'```\n?',
+        re.DOTALL)
+
+    # Find all matches in the input string
+    matches = pattern.findall(diff_string)
+
+    # Extract the file path, search string, and replace string from each match
+    bash_commands = []
+    for match in matches:
+        bash_commands.extend([ c.strip() for c in match.split('\n') ])
+
+    return bash_commands
 
 def search_change_lines(file_lines, raw_search_lines, indentation_count=0):
     search_lines = [' ' * indentation_count + line for line in raw_search_lines]
