@@ -161,7 +161,7 @@ def parse_bash_string(diff_string):
     # Extract the file path, search string, and replace string from each match
     bash_commands = []
     for match in matches:
-        bash_commands.extend([ c.strip() for c in match.split('\n') ])
+        bash_commands.append(match)
 
     return bash_commands
 
