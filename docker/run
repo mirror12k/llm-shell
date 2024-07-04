@@ -5,5 +5,5 @@ docker run -it --rm \
 	--cap-drop=ALL \
 	-v "$PWD:/app" \
 	-v "$PWD/docker:/app/docker:ro" \
-	--env-file=".env" \
+	--env-file="docker/.env" \
 	--name running-test-llm-shell "test-llm-shell"

@@ -15,12 +15,12 @@ from llm_shell.util import read_file_contents, get_prompt, shorten_output, summa
     parse_bash_string, parse_diff_string, apply_changes, \
     save_llm_config_to_file, load_llm_config_from_file, record_debug_history
 
-version = '0.3.0'
+version = '0.4.0'
 history = []
 llm_config = {
     'llm_backend': os.getenv('LLM_BACKEND', 'gpt-4-turbo'),
     'llm_instruction': "You are a programming assistant. Help the user build programs and resolve errors.",
-    'llm_reindent_with_tabs': True,
+    'llm_reindent_with_tabs': False,
     'llm_history_length': 5,
     'experimental_llm_agent': False,
     'experimental_verifier_command': None,
@@ -31,11 +31,16 @@ llm_config = {
 }
 
 support_llm_backends = {
+    'gpt-4o': chatgpt_support.send_to_gpt4o,
     'gpt-4-turbo': chatgpt_support.send_to_gpt4turbo,
     'gpt-4': chatgpt_support.send_to_gpt4,
     'gpt-3.5-turbo': chatgpt_support.send_to_gpt35turbo,
     'claude-instant-v1': bedrock_support.send_to_claude_instant1,
     'claude-v2.1': bedrock_support.send_to_claude21,
+    'claude-3-sonnet': bedrock_support.send_to_claude3sonnet,
+    'claude-3.5-sonnet': bedrock_support.send_to_claude35sonnet,
+    'claude-3-haiku': bedrock_support.send_to_claude3haiku,
+    'claude-3-opus': bedrock_support.send_to_claude3opus,
     'hello-world': lambda msg: [ print('llm context:', msg), '''hello world!''' ][1],
 }
 
