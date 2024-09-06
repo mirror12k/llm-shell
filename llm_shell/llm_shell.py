@@ -15,7 +15,7 @@ from llm_shell.util import read_file_contents, get_prompt, shorten_output, summa
     parse_bash_string, parse_diff_string, apply_changes, \
     save_llm_config_to_file, load_llm_config_from_file, record_debug_history
 
-version = '0.4.0'
+version = '0.4.1'
 history = []
 llm_config = {
     'llm_backend': os.getenv('LLM_BACKEND', 'gpt-4-turbo'),
