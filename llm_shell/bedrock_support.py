@@ -26,6 +26,26 @@ role_mapping = {
     'assistant': 'Assistant',
 }
 
+def merge_sequential_messages(messages):
+    merged = []
+    prev_role = None
+    current = {}
+
+    for msg in messages:
+        if msg['role'] != prev_role:
+            if current:
+                merged.append(current)
+            current = msg.copy()
+            prev_role = msg['role']
+        else:
+            current['content'] += '\n\n\n' + msg['content']
+
+    if current:
+        merged.append(current)
+
+    return merged
+
+
 def send_to_bedrock(context, model):
     import boto3
 
@@ -33,32 +53,15 @@ def send_to_bedrock(context, model):
     bedrock_runtime_client = boto3.client('bedrock-runtime')  
 
     system_prompt = next(step['content'] for step in context if step['role'] == 'system')
-    # system_prompt = next(step for step in context if step['role'] == 'system')
-    # prompt = '\n\n'.join( f"{role_mapping[step['role']]}: {step['content']}" for step in context if step['role'] != 'system' )
-    # prompt += f"\n\n{system_prompt['content']}"
-    # prompt += '\n\nAssistant:'
-
-    # print([ { "role": step['role'], "content": [{
-    #                 "type": "text",
-    #                 "text": step['content']
-    #             }] } for step in context if step['role'] != 'system' ])
+    context_prompts = [ step for step in context if step['role'] != 'system' ]
+    context_prompts = merge_sequential_messages(context_prompts)
 
     # Prepare the body of the request
     body = json.dumps({
         "messages": [ { "role": step['role'], "content": [{
                     "type": "text",
                     "text": step['content']
-                }] } for step in context if step['role'] != 'system' ],
-        # "messages": [
-        #     {
-        #         "role": "user",
-        #         "content": [{
-        #             "type": "text",
-        #             "text": "What is quantum mechanics?"
-        #         }]
-        #     }
-        # ],
-        # "prompt": prompt,
+                }] } for step in context_prompts ],
         "system": system_prompt,
         "max_tokens": 30000,
         "temperature": 0.5,
