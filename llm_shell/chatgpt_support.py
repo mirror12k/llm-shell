@@ -22,8 +22,11 @@ total_estimated_cost = 0
 total_tokens_used = 0
 
 model_prices = {
-    'gpt-4-1106-preview': { 'output': 0.03, 'input': 0.01 },
+    'gpt-4o': { 'output': 0.015, 'input': 0.005 },
+    'gpt-4-turbo': { 'output': 0.03, 'input': 0.01 },
     'gpt-4': { 'output': 0.06, 'input': 0.03 },
+    'gpt-4-1106-preview': { 'output': 0.03, 'input': 0.01 },
+    'gpt-3.5-turbo': { 'output': 0.006, 'input': 0.003 },
     'gpt-3.5-turbo-1106': { 'output': 0.0020, 'input': 0.0010 },
 }
 def send_to_chatgpt_model(context, model):
