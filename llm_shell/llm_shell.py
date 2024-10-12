@@ -84,7 +84,7 @@ def execute_verifier_command(verifier_command):
         print(f"Executing verifier command: {verifier_command}")
         process_standard_command(verifier_command)
 
-def handle_llm_command(command):
+def handle_llm_command(command, do_slow_print=False, **kwargs):
     # Prepare the context
     context = history[-llm_config['llm_history_length']:]
 
@@ -103,9 +103,12 @@ def handle_llm_command(command):
     context.append({"role": "user", "content": command})
 
     # Send to LLM and process response
-    response = send_to_llm(context)
+    response = send_to_llm(context, **kwargs)
     highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
-    slow_print(highlighted_response)
+    if do_slow_print:
+        slow_print(highlighted_response)
+    else:
+        print(highlighted_response)
 
     # Record the debug history if the option is enabled
     if llm_config['record_debug_history']:
@@ -295,7 +298,7 @@ def handle_command(command):
         if llm_config['experimental_bash_agent']:
             handle_llm_bash_agent_loop(command)
         else:
-            handle_llm_command(command)
+            handle_llm_command(command, do_slow_print=True)
     else:
         process_standard_command(command)
 
@@ -380,12 +383,39 @@ def main():
 
 
 def ask_llm():
-    if len(sys.argv) < 2:
-        print("Usage: llm-shell-ask <topic>")
+    # Initialize the argument parser
+    parser = argparse.ArgumentParser(description='Ask a question to the LLM.')
+    parser.add_argument('-v', '--version', action='version', version='LLM Shell v' + version)
+    parser.add_argument('-in', '--stdin', action='store_true', help='Read input from stdin.')
+    parser.add_argument('-c', '--context', action='append', default=[], help='Set a file to use as context for the language model.')
+    parser.add_argument('topic', nargs='?', default='', help='The topic or question to ask the LLM.')
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Read available stdin if --stdin is provided
+    if args.stdin:
+        stdin_content = sys.stdin.read()
+    else:
+        stdin_content = ''
+
+    # Prepare the context
+    query = ''
+    if stdin_content:
+        query += stdin_content + "\n\n\n"
+    if args.topic:
+        query += args.topic
+
+    if not (stdin_content or args.topic):
+        print("No input provided. Please provide a topic or question, or pipe some input to the command with --stdin.")
         return
 
-    topic = ' '.join(sys.argv[1:])
-    context = [{"role": "user", "content": topic}]
-    response = send_to_llm(context, show_spinner=False)
+    # Load the LLM config from file
+    load_llm_config_from_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
+
+    # Set the context_file from the -c/--context arguments
+    llm_config['context_file'] = args.context
+
+    response = handle_llm_command(query, show_spinner=False)
     print(response)
 
