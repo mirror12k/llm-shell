@@ -64,11 +64,15 @@ def execute_shell_command(cmd):
         print('process exited with code: ', process.returncode)
     return ''.join(output), process.returncode
 
-def send_to_llm(context):
+def send_to_llm(context, show_spinner=True):
     if llm_config['llm_backend'] not in support_llm_backends:
         raise Exception(f"LLM backend '{llm_config['llm_backend']}' is not supported yet.")
-    with start_spinner():
-        return support_llm_backends[llm_config['llm_backend']](context)
+    backend_fun = support_llm_backends[llm_config['llm_backend']]
+    if show_spinner:
+        with start_spinner():
+            return backend_fun(context)
+    else:
+        return backend_fun(context)
 
 def update_history(role, content):
     global history
@@ -375,5 +379,13 @@ def main():
     run_llm_shell()
 
 
+def ask_llm():
+    if len(sys.argv) < 2:
+        print("Usage: llm-shell-ask <topic>")
+        return
 
+    topic = ' '.join(sys.argv[1:])
+    context = [{"role": "user", "content": topic}]
+    response = send_to_llm(context, show_spinner=False)
+    print(response)
 

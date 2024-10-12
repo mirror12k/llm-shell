@@ -70,7 +70,7 @@ def send_to_chatgpt_model(context, model):
         total_estimated_cost += estimated_cost_input + estimated_cost_output
         total_tokens_used += response_data['usage']['total_tokens']
 
-        print(f"\t(Total tokens so far: {bold_gold(str(total_tokens_used))}, Total cost so far: {bold_gold(f'${total_estimated_cost:.2f}')} )")
+        # print(f"\t(Total tokens so far: {bold_gold(str(total_tokens_used))}, Total cost so far: {bold_gold(f'${total_estimated_cost:.2f}')} )")
 
         assistant_message = response_data['choices'][0]['message']['content']
         return assistant_message.strip()

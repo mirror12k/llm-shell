@@ -10,7 +10,8 @@ setup(
    ],
    entry_points={
        'console_scripts': [
-           'llm-shell=llm_shell.llm_shell:main',
+            'llm-shell=llm_shell.llm_shell:main',
+            'llm-shell-ask=llm_shell.llm_shell:ask_llm',
        ],
    },
    # Metadata
