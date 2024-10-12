@@ -5,14 +5,17 @@ from llm_shell.util import bold_gold
 
 chatgpt_api_key = os.getenv('CHATGPT_API_KEY')
 
+def send_to_gpt4o(context):
+    return send_to_chatgpt_model(context, 'gpt-4o')
+
 def send_to_gpt4turbo(context):
-    return send_to_chatgpt_model(context, 'gpt-4-1106-preview')
+    return send_to_chatgpt_model(context, 'gpt-4-turbo')
 
 def send_to_gpt4(context):
     return send_to_chatgpt_model(context, 'gpt-4')
 
 def send_to_gpt35turbo(context):
-    return send_to_chatgpt_model(context, 'gpt-3.5-turbo-1106')
+    return send_to_chatgpt_model(context, 'gpt-3.5-turbo')
 
 
 total_estimated_cost = 0
