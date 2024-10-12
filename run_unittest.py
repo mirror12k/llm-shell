@@ -6,7 +6,7 @@ import unittest
 import tempfile
 from unittest.mock import patch, Mock
 from io import StringIO
-from llm_shell.llm_shell import autocomplete_string, handle_command, llm_config
+from llm_shell.llm_shell import autocomplete_string, handle_command, ask_llm, llm_config
 from llm_shell.util import parse_diff_string, apply_changes
 
 # Define a helper context manager to capture stdout
@@ -418,7 +418,49 @@ if True:
 
 		os.remove('/tmp/flask.py')
 
+class TestAskLLM(unittest.TestCase):
+    def setUp(self):
+        self.original_stdout = sys.stdout
+        self.captured_stdout = StringIO()
+        sys.stdout = self.captured_stdout
 
+    def tearDown(self):
+        sys.stdout = self.original_stdout
+
+    @patch('llm_shell.llm_shell.handle_llm_command')
+    def test_ask_llm_with_topic(self, mock_handle_llm_command):
+        sys.argv = ['ask_llm.py', 'What is the capital of France?']
+        ask_llm()
+        mock_handle_llm_command.assert_called_with('What is the capital of France?', show_spinner=False)
+
+    @patch('llm_shell.llm_shell.handle_llm_command')
+    def test_ask_llm_with_stdin(self, mock_handle_llm_command):
+        sys.stdin = StringIO('This is some input from stdin.\n')
+        sys.argv = ['ask_llm.py', '--stdin']
+        ask_llm()
+        mock_handle_llm_command.assert_called_with('This is some input from stdin.\n\n\n\n', show_spinner=False)
+
+    @patch('llm_shell.llm_shell.handle_llm_command')
+    def test_ask_llm_with_topic_and_stdin(self, mock_handle_llm_command):
+        sys.stdin = StringIO('This is some input from stdin.\n')
+        sys.argv = ['ask_llm.py', '--stdin', 'What is the capital of France?']
+        ask_llm()
+        mock_handle_llm_command.assert_called_with('This is some input from stdin.\n\n\n\nWhat is the capital of France?', show_spinner=False)
+
+    @patch('llm_shell.llm_shell.handle_llm_command')
+    @patch('llm_shell.llm_shell.load_llm_config_from_file')
+    def test_ask_llm_with_context_file(self, mock_load_llm_config, mock_handle_llm_command):
+        mock_load_llm_config.return_value = None
+        sys.argv = ['ask_llm.py', '-c', 'file1.py', '-c', 'file2.py', 'What is the capital of France?']
+        ask_llm()
+        self.assertEqual(llm_config['context_file'], ['file1.py', 'file2.py'])
+        mock_handle_llm_command.assert_called_with('What is the capital of France?', show_spinner=False)
+
+    def test_ask_llm_no_input(self):
+        sys.argv = ['ask_llm.py']
+        ask_llm()
+        # self.assertRaises(SystemExit, ask_llm)
+        self.assertIn('No input provided', self.captured_stdout.getvalue())
 
 if __name__ == '__main__':
 	unittest.main()
