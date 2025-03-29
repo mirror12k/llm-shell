@@ -15,10 +15,10 @@ from llm_shell.util import read_file_contents, get_prompt, shorten_output, summa
     parse_bash_string, parse_diff_string, apply_changes, \
     save_llm_config_to_file, load_llm_config_from_file, record_debug_history
 
-version = '0.4.1'
+version = '0.5.1'
 history = []
 llm_config = {
-    'llm_backend': os.getenv('LLM_BACKEND', 'gpt-4-turbo'),
+    'llm_backend': os.getenv('LLM_BACKEND', 'openai-gpt-4o'),
     'llm_instruction': "You are a programming assistant. Help the user build programs and resolve errors.",
     'llm_reindent_with_tabs': False,
     'llm_history_length': 5,
@@ -31,12 +31,15 @@ llm_config = {
 }
 
 support_llm_backends = {
-    'gpt-4o': chatgpt_support.send_to_gpt4o,
-    'gpt-4-turbo': chatgpt_support.send_to_gpt4turbo,
-    'gpt-4': chatgpt_support.send_to_gpt4,
-    'gpt-3.5-turbo': chatgpt_support.send_to_gpt35turbo,
+    'openai-o1-preview': chatgpt_support.send_to_o1,
+    'openai-o1-mini': chatgpt_support.send_to_o1mini,
+    'openai-gpt-4o': chatgpt_support.send_to_gpt4o,
+    'openai-gpt-4o-mini': chatgpt_support.send_to_gpt4omini,
+    'openai-gpt-4-turbo': chatgpt_support.send_to_gpt4turbo,
+    'openai-gpt-4': chatgpt_support.send_to_gpt4,
+    'openai-gpt-3.5-turbo': chatgpt_support.send_to_gpt35turbo,
     'claude-instant-v1': bedrock_support.send_to_claude_instant1,
-    'claude-v2.1': bedrock_support.send_to_claude21,
+    'claude-2.1': bedrock_support.send_to_claude21,
     'claude-3-sonnet': bedrock_support.send_to_claude3sonnet,
     'claude-3.5-sonnet': bedrock_support.send_to_claude35sonnet,
     'claude-3-haiku': bedrock_support.send_to_claude3haiku,
@@ -61,11 +64,15 @@ def execute_shell_command(cmd):
         print('process exited with code: ', process.returncode)
     return ''.join(output), process.returncode
 
-def send_to_llm(context):
+def send_to_llm(context, show_spinner=True):
     if llm_config['llm_backend'] not in support_llm_backends:
         raise Exception(f"LLM backend '{llm_config['llm_backend']}' is not supported yet.")
-    with start_spinner():
-        return support_llm_backends[llm_config['llm_backend']](context)
+    backend_fun = support_llm_backends[llm_config['llm_backend']]
+    if show_spinner:
+        with start_spinner():
+            return backend_fun(context)
+    else:
+        return backend_fun(context)
 
 def update_history(role, content):
     global history
@@ -77,7 +84,7 @@ def execute_verifier_command(verifier_command):
         print(f"Executing verifier command: {verifier_command}")
         process_standard_command(verifier_command)
 
-def handle_llm_command(command):
+def handle_llm_command(command, do_slow_print=False, **kwargs):
     # Prepare the context
     context = history[-llm_config['llm_history_length']:]
 
@@ -96,9 +103,12 @@ def handle_llm_command(command):
     context.append({"role": "user", "content": command})
 
     # Send to LLM and process response
-    response = send_to_llm(context)
+    response = send_to_llm(context, **kwargs)
     highlighted_response = apply_syntax_highlighting(response, reindent_with_tabs=llm_config['llm_reindent_with_tabs'])
-    slow_print(highlighted_response)
+    if do_slow_print:
+        slow_print(highlighted_response)
+    else:
+        print(highlighted_response)
 
     # Record the debug history if the option is enabled
     if llm_config['record_debug_history']:
@@ -288,7 +298,7 @@ def handle_command(command):
         if llm_config['experimental_bash_agent']:
             handle_llm_bash_agent_loop(command)
         else:
-            handle_llm_command(command)
+            handle_llm_command(command, do_slow_print=True)
     else:
         process_standard_command(command)
 
@@ -372,5 +382,40 @@ def main():
     run_llm_shell()
 
 
+def ask_llm():
+    # Initialize the argument parser
+    parser = argparse.ArgumentParser(description='Ask a question to the LLM.')
+    parser.add_argument('-v', '--version', action='version', version='LLM Shell v' + version)
+    parser.add_argument('-in', '--stdin', action='store_true', help='Read input from stdin.')
+    parser.add_argument('-c', '--context', action='append', default=[], help='Set a file to use as context for the language model.')
+    parser.add_argument('topic', nargs='?', default='', help='The topic or question to ask the LLM.')
 
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Read available stdin if --stdin is provided
+    if args.stdin:
+        stdin_content = sys.stdin.read()
+    else:
+        stdin_content = ''
+
+    # Prepare the context
+    query = ''
+    if stdin_content:
+        query += stdin_content + "\n\n\n"
+    if args.topic:
+        query += args.topic
+
+    if not (stdin_content or args.topic):
+        print("No input provided. Please provide a topic or question, or pipe some input to the command with --stdin.")
+        return
+
+    # Load the LLM config from file
+    load_llm_config_from_file(config_path=os.path.join(os.path.expanduser('~'), '.llm_shell_config'), llm_config=llm_config)
+
+    # Set the context_file from the -c/--context arguments
+    llm_config['context_file'] = args.context
+
+    response = handle_llm_command(query, show_spinner=False)
+    print(response)
 

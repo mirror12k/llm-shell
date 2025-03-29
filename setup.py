@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
    name='llm-shell',
-   version='0.4.1',
+   version='0.5.1',
    packages=find_packages(),
    install_requires=[
        'requests',
@@ -10,7 +10,8 @@ setup(
    ],
    entry_points={
        'console_scripts': [
-           'llm-shell=llm_shell.llm_shell:main',
+            'llm-shell=llm_shell.llm_shell:main',
+            'llm-shell-ask=llm_shell.llm_shell:ask_llm',
        ],
    },
    # Metadata
