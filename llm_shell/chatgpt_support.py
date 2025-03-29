@@ -76,3 +76,22 @@ def send_to_chatgpt_model(context, model):
         return assistant_message.strip()
     else:
         return f"Error: {response.status_code}, {response.text}"
+
+# loads a list of openai model ids from the API
+def get_openai_models():
+    global chatgpt_api_key
+
+    if not chatgpt_api_key:
+        raise Exception("Can't execute chatgpt without 'CHATGPT_API_KEY' environment variable set.")
+
+    headers = {
+        "Authorization": f"Bearer {chatgpt_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.get("https://api.openai.com/v1/models",  headers=headers)
+
+    response_data = response.json()
+    model_ids = list(map(lambda d: d['id'], response_data['data']))
+
+    return model_ids
